@@ -1,0 +1,9 @@
+*.parquet
+*.db
+*.csv
+*.txt
+*.xlsx
+data/
+nsrdb.py
+__pycache__/
+.DS_Store

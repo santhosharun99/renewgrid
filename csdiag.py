@@ -1,0 +1,11 @@
+import pandas as pd
+d = pd.read_csv("days.csv", parse_dates=["date"]).set_index("date")
+print("clear days per month-of-year:")
+print(d[d.clear].groupby(d[d.clear].index.month).size().to_string())
+print("\nall usable days per month-of-year:")
+print(d.groupby(d.index.month).size().to_string())
+print("\nclear-day rate by month (%):")
+r = (d.groupby(d.index.month).clear.mean()*100).round(1)
+print(r.to_string())
+print("\nclear days per calendar year-month:")
+print(d[d.clear].groupby(d[d.clear].index.to_period("M")).size().to_string())
