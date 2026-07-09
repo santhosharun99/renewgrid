@@ -59,11 +59,13 @@ def cell_temperature(poa, w, model="sapm"):
     raise ValueError(model)
 
 
-def expected(w, p=None):
+def expected(w, p=None, sp=None):
     """Weather dataframe -> dict of hourly series: ac (W), poa, poa_direct,
-    zenith, azimuth. Index = w.index (tz-aware)."""
+    zenith, azimuth. Index = w.index (tz-aware). Pass a precomputed
+    solarposition frame via sp when calling repeatedly (calibration)."""
     p = p or params()
-    sp = pvlib.solarposition.get_solarposition(w.index, LAT, LON)
+    if sp is None:
+        sp = pvlib.solarposition.get_solarposition(w.index, LAT, LON)
     poa = pvlib.irradiance.get_total_irradiance(
         p["tilt"], p["azim"], sp.apparent_zenith, sp.azimuth,
         dni=w.direct_normal_irradiance, ghi=w.shortwave_radiation,

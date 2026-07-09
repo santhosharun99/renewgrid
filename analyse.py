@@ -1,7 +1,9 @@
-import pandas as pd, numpy as np, requests
+import pandas as pd, requests
+
+import quality
 
 LAT, LON = 10.7905, 78.7047
-df = pd.read_parquet("production.parquet")
+df = quality.load_production()
 d0, d1 = df.t.min().date(), df.t.max().date()
 
 print(f"fetching weather {d0} -> {d1} ...")
@@ -19,8 +21,7 @@ print("weather rows:", len(w))
 ph = df.set_index("t")["power_w"].resample("h").mean().to_frame("power_w")
 j = ph.join(w.set_index("time"), how="inner")
 
-n = df.groupby(df.t.dt.date).size()
-good = set(n[n >= 130].index)
+good = quality.usable_days(df)   # shared gate — do not re-implement
 
 daily = j.resample("D").agg(
     kwh=("power_w", lambda s: s.sum()/1000),
@@ -32,14 +33,18 @@ daily = daily[daily.index.map(lambda x: x.date() in good)]
 daily = daily[daily.ghi > 2000]
 daily["eff"] = daily.kwh / daily.ghi * 1000
 
-# strip outage/fault days: keep only days near the top of the eff distribution locally
+# outage/fault/gap days come from outage_classifier.py (events.csv),
+# not from a local eff-ratio heuristic
+daily = quality.exclude_events(daily)
+
 daily["eff30"] = daily.eff.rolling(30, center=True, min_periods=10).quantile(0.90)
 
 print("\n=== monthly mean eff (clear-ish days only) ===")
 top = daily[daily.eff > daily.eff.rolling(15, center=True, min_periods=5).quantile(0.75)]
 print(top.eff.resample("ME").mean().round(3).to_string())
 
-print("\n=== worst 15 days (eff vs local 90th pct) ===")
+print("\n=== worst 15 remaining days (eff vs local 90th pct) ===")
+print("(known events already excluded via events.csv)")
 daily["ratio"] = daily.eff / daily.eff30
 print(daily.nsmallest(15, "ratio")[["kwh","ghi","rain","eff","eff30","ratio"]].round(2).to_string())
 

@@ -54,8 +54,9 @@ for idx, row in df.iterrows():
 df["cum_dust"] = cumulative_dust
 df["cum_pm10"] = cumulative_pm10
 
-clear_mask = (df["vi"] < df["vi"].quantile(0.40)) & (df["drops"] <= 2)
-df_clear = df[clear_mask].dropna(subset=[pr_col, "cum_dust"])
+import quality
+clear = quality.clear_days(days)  # shared gate (vi < q40, drops <= 2)
+df_clear = df[[d.date() in clear for d in df.index]].dropna(subset=[pr_col, "cum_dust"])
 
 print(f"Clear days count (for deposition exp): {len(df_clear)}")
 print(f"Correlation (PR vs Cum Dust): {df_clear[pr_col].corr(df_clear['cum_dust']):.4f}")
