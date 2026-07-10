@@ -307,6 +307,8 @@ export default function App() {
       : [{ ...a, on: !a.on }]));
   const setApplianceQty = (id:string, q:number) => setAppliances(prev =>
     prev.map(a => a.id === id ? { ...a, qty: Math.max(1, Math.min(99, q || 1)) } : a));
+  const setApplianceUnit = (id:string, w:number) => setAppliances(prev =>
+    prev.map(a => a.id === id ? { ...a, unit: Math.max(1, Math.min(9999, w || 1)) } : a));
   const addAppliance = () => {
     const w = parseInt(newAppl.watts), q = Math.max(1, parseInt(newAppl.qty) || 1);
     if (!w || w < 1) return;
@@ -379,7 +381,7 @@ export default function App() {
               </div>
               <div className="appliance-table">
                 <div className="appliance-row appliance-head">
-                  <span>Appliance</span><span>Qty</span><span>Load</span><span>Runs on (if on now)</span>
+                  <span>Appliance</span><span>Qty</span><span>Watts each</span><span>Runs on (if on now)</span>
                 </div>
                 {applianceRows.map((a, idx) => (
                   <div key={a.id}
@@ -403,7 +405,15 @@ export default function App() {
                                  onChange={e=>setApplianceQty(a.id, Number(e.target.value))}/>
                         : a.qty}
                     </span>
-                    <span className="a-watts">{a.total} W</span>
+                    <span className="a-watts">
+                      {a.on
+                        ? <>
+                            <input type="number" className="a-qty-input a-watts-input" min={1} max={9999}
+                                   value={a.unit} onChange={e=>setApplianceUnit(a.id, Number(e.target.value))}/>
+                            {a.qty > 1 && <span className="sub-label"> = {a.total} W</span>}
+                          </>
+                        : `${a.total} W`}
+                    </span>
                     <span>
                       {!a.on ? <span className="a-off-dash">off</span>
                        : a.alloc === a.total ? <span className="app-pill solar">Solar</span>
