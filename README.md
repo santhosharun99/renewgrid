@@ -77,7 +77,36 @@ Shared modules (import, never re-implement):
 
 ## Headline numbers
 
-<!-- NUMBERS -->
+Rolling-origin backtest (16 months, event days excluded via `events.csv`,
+daily kWh MAPE; 2026-07-10):
+
+| model | MAPE | DM test vs hybrid_l1 |
+|---|---|---|
+| **hybrid (pvlib + LGBM residual, l1, AQ features)** | **10.84%** | — |
+| pvlib alone (calibrated) | 11.13% | p = 0.096 — *not significant* |
+| hybrid (l2 objective) | 11.43% | p = 0.063 |
+| persistence (yesterday's profile) | 19.35% | p ≈ 2×10⁻¹⁴ |
+| climatology (hour × doy train mean) | 20.34% | p ≈ 4×10⁻¹⁴ |
+
+- **⚠️ Superseded claim:** the earlier "pvlib 20.56% → hybrid 12.51%,
+  wins 14/15 months" was an artifact — the old backtest scored logger-gap
+  and outage days. On clean days the residual model adds ~0.3 MAPE points
+  over physics alone and the gap is **not statistically significant**.
+  The hybrid's value is proven against persistence/climatology, not pvlib.
+- Clear-day R² (top-5% VI days, sun hours): **0.9016** — unchanged by full
+  physics calibration (fitted tilt 11.8°, azim 104°, pdc0 2782 W, 7° eastern
+  shade horizon, pvwatts inverter; `calibrate.py` → `params.json`).
+  The physics layer is at the ceiling set by Open-Meteo irradiance noise.
+- Probabilistic: P10–P90 empirical coverage **67%** vs 80% nominal
+  (intervals too narrow; see `calibration.png`), mean width 417 W,
+  pinball 49/85/34 W at α = 0.1/0.5/0.9. Widen before showing bands in UI.
+- Degradation: clear-day bootstrap 95% CI **[−5.79, +3.59] %/yr** →
+  no detectable degradation (raw PR trends are misleading; see clear.py).
+- Events (677 days): 20 outage-or-fault, 10 logger gaps, 4 underperformance;
+  **163 kWh ≈ ₹978** lost at ₹6/kWh (indicative; TNEB slabs are telescopic).
+  Logger gaps are lost *data*, not lost production, and are not charged.
+- Air-quality features: keep — with-AQ 10.84% vs without 11.17% MAPE
+  (small but consistent attenuation signal; see `shap_attribution.csv`).
 
 ## Standing decisions — do not re-litigate
 
