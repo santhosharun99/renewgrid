@@ -209,15 +209,17 @@ def get_yield():
 # ════════════════════════════════════════════════════════════════════
 @app.get("/forecast")
 def get_forecast():
-    """Tomorrow's quantile forecast. Regenerates forecast.json when it is
-    missing, for the wrong date, or older than 6 h."""
-    tomorrow = str(date.today() + timedelta(days=1))
+    """7-day quantile forecast. Regenerates forecast.json when it is
+    missing, doesn't start today, or is older than 4 h (weather models
+    refresh every few hours — don't predict off stale weather)."""
+    today = str(date.today())
     doc = None
     try:
         with open("forecast.json") as f: doc = json.load(f)
-        if (not isinstance(doc, dict) or doc.get("date") != tomorrow
+        if (not isinstance(doc, dict) or "days" not in doc
+                or not doc["days"] or doc["days"][0]["date"] != today
                 or (datetime.now() - datetime.fromisoformat(doc["generated_at"])
-                    ).total_seconds() > 6 * 3600):
+                    ).total_seconds() > 4 * 3600):
             doc = None
     except Exception:
         doc = None
@@ -226,14 +228,8 @@ def get_forecast():
             import export_forecast
             doc = export_forecast.generate()
         except Exception as e:
-            return {"hourly": [], "summary": {}, "error": str(e)}
-    data = doc["hourly"]
-    return {"date": doc["date"], "generated_at": doc["generated_at"],
-            "hourly": data, "summary": {
-            "expected_kwh": round(sum(d['p50'] for d in data)/1000, 2),
-            "worst_kwh":    round(sum(d['p10'] for d in data)/1000, 2),
-            "best_kwh":     round(sum(d['p90'] for d in data)/1000, 2),
-        }}
+            return {"days": [], "error": str(e)}
+    return doc
 
 # ════════════════════════════════════════════════════════════════════
 #  SAVINGS  (₹ saved vs grid)
@@ -453,8 +449,13 @@ def get_cleaning():
 #  WEATHER
 # ════════════════════════════════════════════════════════════════════
 @app.get("/weather")
-def get_weather():
-    tomorrow = (date.today() + timedelta(days=1)).isoformat()
+def get_weather(day: str = ""):
+    """Weather detail for one forecast day (default: tomorrow)."""
+    try:
+        target = pd.to_datetime(day).date().isoformat() if day else \
+            (date.today() + timedelta(days=1)).isoformat()
+    except Exception:
+        target = (date.today() + timedelta(days=1)).isoformat()
     try:
         r = requests.get("https://api.open-meteo.com/v1/forecast", params={
             "latitude": LAT, "longitude": LON,
@@ -463,7 +464,7 @@ def get_weather():
             "daily": "weathercode,temperature_2m_max,temperature_2m_min,"
                      "precipitation_sum,sunshine_duration,uv_index_max",
             "timezone": "Asia/Kolkata",
-            "start_date": tomorrow, "end_date": tomorrow,
+            "start_date": target, "end_date": target,
         }, timeout=10)
         r.raise_for_status(); raw = r.json()
         hourly, daily_r = raw["hourly"], raw["daily"]

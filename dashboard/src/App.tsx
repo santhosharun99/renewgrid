@@ -42,7 +42,8 @@ export default function App() {
   const [showDateDrop, setShowDateDrop] = useState(false);
   const dropRef = useRef<HTMLDivElement>(null);
 
-  const [forecastData, setForecastData] = useState<any>({ hourly: [], summary: {} });
+  const [forecastData, setForecastData] = useState<any>({ days: [] });
+  const [selFcDate, setSelFcDate]       = useState<string>('');
   const [weatherData, setWeatherData]   = useState<any>(null);
 
   const [savings, setSavings]   = useState<any>(null);
@@ -74,11 +75,25 @@ export default function App() {
       if(dates.length) setSelDate(dates[0]);
     }).catch(console.error);
 
-    fetch(`${API}/forecast`).then(r=>r.json()).then(setForecastData).catch(console.error);
-    fetch(`${API}/weather`).then(r=>r.json()).then(setWeatherData).catch(console.error);
     fetch(`${API}/impact`).then(r=>r.json()).then(setImpact).catch(console.error);
     fetch(`${API}/cleaning`).then(r=>r.json()).then(setCleaning).catch(console.error);
   }, []);
+
+  useEffect(() => {
+    const pull = () => fetch(`${API}/forecast`).then(r=>r.json()).then(d => {
+      setForecastData(d);
+      // default to tomorrow; server regenerates when weather is >4 h old
+      setSelFcDate(prev => d.days?.some((x:any)=>x.date===prev) ? prev : (d.days?.[1]?.date ?? d.days?.[0]?.date ?? ''));
+    }).catch(console.error);
+    pull();
+    const id = setInterval(pull, 30 * 60 * 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    if (!selFcDate) return;
+    fetch(`${API}/weather?day=${selFcDate}`).then(r=>r.json()).then(setWeatherData).catch(console.error);
+  }, [selFcDate]);
 
   useEffect(() => {
     fetch(`${API}/savings?consumption=${consumption}`).then(r=>r.json()).then(setSavings).catch(console.error);
@@ -98,6 +113,7 @@ export default function App() {
 
   const currentPower = liveData.length ? liveData[liveData.length-1].power : 0;
   const accuracy = dayData?.accuracy_pct;
+  const fcDay = forecastData.days?.find((d:any)=>d.date===selFcDate) ?? forecastData.days?.[0];
 
   // solar is "live" only if the last reading is recent — otherwise /live is
   // showing a past day's curve (night, logger asleep) and the house is on EB
@@ -161,7 +177,7 @@ export default function App() {
         <header>
           <h1>{
             activeTab==='live' ? 'Plant Live Status' :
-            activeTab==='forecast' ? "Tomorrow's Forecast" :
+            activeTab==='forecast' ? 'Generation Forecast' :
             activeTab==='savings' ? 'Money Saved' :
             activeTab==='impact' ? 'Green Impact' : 'System Insights'
           }</h1>
@@ -317,10 +333,25 @@ export default function App() {
         {/* ═══════════════════ FORECAST TAB ═══════════════════ */}
         {activeTab==='forecast' && (
           <div className="forecast-layout">
+            {/* Week selector, weather-app style */}
+            <div className="day-chips">
+              {forecastData.days?.map((d:any, i:number) => (
+                <button key={d.date} className={`day-chip${d.date===selFcDate?' active':''}`} onClick={()=>setSelFcDate(d.date)}>
+                  <span className="dc-day">{i===0?'Today':i===1?'Tmrw':d.weekday}</span>
+                  <span className="dc-date">{d.date.slice(8)}/{d.date.slice(5,7)}</span>
+                  <span className="dc-kwh">{d.p50_kwh} kWh</span>
+                </button>
+              ))}
+            </div>
+            {forecastData.generated_at && (
+              <p className="sub-label" style={{marginTop:'-0.8rem'}}>
+                Weather pulled {forecastData.generated_at.replace('T',' ').slice(0,16)} · auto-refreshes every 4 h · further days are less certain
+              </p>
+            )}
             <div className="forecast-stats">
-              <div className="card stat-card"><div className="stat-icon gold"><Sun size={20}/></div><div className="stat-info"><p>Expected Generation</p><h3>{forecastData.summary?.expected_kwh??'—'} kWh</h3><span className="sub-label">most likely</span></div></div>
-              <div className="card stat-card"><div className="stat-icon green"><Zap size={20}/></div><div className="stat-info"><p>Best-Case</p><h3>{forecastData.summary?.best_kwh??'—'} kWh</h3><span className="sub-label">clear skies</span></div></div>
-              <div className="card stat-card"><div className="stat-icon red"><BarChart3 size={20}/></div><div className="stat-info"><p>Worst-Case</p><h3>{forecastData.summary?.worst_kwh??'—'} kWh</h3><span className="sub-label">cloudy / rainy</span></div></div>
+              <div className="card stat-card"><div className="stat-icon gold"><Sun size={20}/></div><div className="stat-info"><p>Expected Generation</p><h3>{fcDay?.p50_kwh??'—'} kWh</h3><span className="sub-label">most likely · {fcDay?.date??''}</span></div></div>
+              <div className="card stat-card"><div className="stat-icon green"><Zap size={20}/></div><div className="stat-info"><p>Best-Case</p><h3>{fcDay?.p90_kwh??'—'} kWh</h3><span className="sub-label">clear skies</span></div></div>
+              <div className="card stat-card"><div className="stat-icon red"><BarChart3 size={20}/></div><div className="stat-info"><p>Worst-Case</p><h3>{fcDay?.p10_kwh??'—'} kWh</h3><span className="sub-label">cloudy / rainy</span></div></div>
             </div>
             {weatherData && !weatherData.error && (<>
               <div className="card weather-hero">
@@ -346,7 +377,7 @@ export default function App() {
               </div>
               <div className="card impact-banner" style={{borderLeftColor:weatherData.impact?.color}}>
                 <div className="impact-icon" style={{background:`${weatherData.impact?.color}22`,color:weatherData.impact?.color}}><Sun size={18}/></div>
-                <div><div className="impact-title">How tomorrow's weather affects your panels</div><div className="impact-text">{weatherData.impact?.text}</div></div>
+                <div><div className="impact-title">How this day's weather affects your panels</div><div className="impact-text">{weatherData.impact?.text}</div></div>
               </div>
             </>)}
             <div className="card chart-card full-width">
@@ -358,7 +389,7 @@ export default function App() {
                 </div>
               </div>
               <ResponsiveContainer width="100%" height={260}>
-                <AreaChart data={forecastData.hourly}>
+                <AreaChart data={fcDay?.hourly ?? []}>
                   <defs>
                     <linearGradient id="g90" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#6366f1" stopOpacity={0.3}/><stop offset="95%" stopColor="#6366f1" stopOpacity={0}/></linearGradient>
                     <linearGradient id="g50" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#6366f1" stopOpacity={0.7}/><stop offset="95%" stopColor="#6366f1" stopOpacity={0.1}/></linearGradient>
