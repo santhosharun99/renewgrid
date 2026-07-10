@@ -372,47 +372,79 @@ def get_impact():
 # ════════════════════════════════════════════════════════════════════
 @app.get("/cleaning")
 def get_cleaning():
+    """Soiling assessment with honest uncertainty.
+
+    Compares the last 10 days' performance ratio (actual vs *weather-
+    corrected* physics expectation, pr_daily.csv) against the prior
+    30 days, with a bootstrap CI and Mann-Whitney p-value. There is no
+    soiling sensor and the deposition hypothesis failed controlled
+    testing, so this can only ever say "possible"/"likely" — never a
+    confident 0% or a cleaning promise.
+    """
     try:
-        daily = pd.read_csv("daily.csv", index_col=0, parse_dates=True)
-        daily = daily.dropna(subset=['ratio'])
+        from scipy.stats import mannwhitneyu
 
-        recent_7   = daily.tail(7)['ratio'].mean()
-        baseline   = daily.iloc[-31:-7]['ratio'].mean() if len(daily) >= 31 else daily['ratio'].quantile(0.75)
+        pr = pd.read_csv("pr_daily.csv", index_col=0, parse_dates=True)
+        pr = pr.dropna(subset=["PR"])
+        pr = pr[pr.PR.between(0.2, 1.6)]
+        recent = pr.PR.tail(10).to_numpy()
+        base = pr.PR.iloc[-40:-10].to_numpy()
+        if len(recent) < 5 or len(base) < 15:
+            return {"error": "not enough usable days for a verdict"}
 
-        soiling_pct = max(0.0, (baseline - recent_7) / baseline * 100)
-        recent_avg_kwh = daily.tail(7)['kwh'].mean()
-        daily_loss_kwh = recent_avg_kwh * soiling_pct / 100
-        daily_loss_rs  = daily_loss_kwh * TARIFF_RS_PER_KWH
+        delta = (np.median(recent) / np.median(base) - 1) * 100
+        rng = np.random.default_rng(0)
+        boots = np.array([
+            np.median(rng.choice(recent, recent.size)) /
+            np.median(rng.choice(base, base.size)) - 1
+            for _ in range(2000)]) * 100
+        lo, hi = np.percentile(boots, [2.5, 97.5])
+        p = float(mannwhitneyu(recent, base, alternative="less").pvalue)
 
-        # Trend over last 30 days
-        trend = daily.tail(30)[['ratio']].copy().reset_index()
-        trend_chart = [{"date": str(r['index'].date()), "ratio": round(r['ratio'], 3)}
-                       for _, r in trend.iterrows()]
+        # washing-rain context (>5 mm/day resets deposition)
+        w = get_weather_combined()
+        rain = w.precipitation.resample("D").sum()
+        washed = rain[rain > 5]
+        days_since_rain = int((rain.index[-1] - washed.index[-1]).days) if len(washed) else None
+        rain_note = (f" Rain likely washed the panels {days_since_rain} day(s) ago,"
+                     " so a residual dip is probably weather or measurement noise."
+                     if days_since_rain is not None and days_since_rain <= 3 else "")
 
-        if soiling_pct < 2:
-            status = "clean"
-            title  = "Panels are Clean"
-            detail = "Your panels are performing above their recent baseline. No cleaning needed right now."
-            color  = "#10b981"
-        elif soiling_pct < 6:
-            status = "mild"
-            title  = "Mild Soiling Detected"
-            detail = f"Performance is ~{soiling_pct:.1f}% below baseline. Cleaning is optional — you're losing about ₹{daily_loss_rs:.0f}/day."
-            color  = "#f59e0b"
+        ci = f"95% CI {lo:+.1f}% to {hi:+.1f}%"
+        if delta <= -5 and p < 0.05:
+            recent_kwh = float(pr.act.tail(10).mean() / 1000)
+            loss_lo = max(0.0, -hi) / 100 * recent_kwh   # conservative end
+            loss_hi = -lo / 100 * recent_kwh
+            status, color = "likely", "#ef4444"
+            title = "Likely Soiling"
+            detail = (f"PR is {delta:.1f}% below baseline ({ci}, p={p:.3f}) — unlikely "
+                      f"to be chance. Estimated loss {loss_lo:.1f}-{loss_hi:.1f} kWh/day. "
+                      f"Cleaning may pay, but this is inference, not a surface measurement.{rain_note}")
+        elif delta <= -2 and p < 0.25:
+            status, color = "possible", "#f59e0b"
+            title = "Possible Mild Soiling"
+            detail = (f"PR is {delta:.1f}% below baseline ({ci}, p={p:.2f}). Evidence is "
+                      f"weak — this could equally be weather-data error. Recheck after a "
+                      f"few clear days before cleaning.{rain_note}")
         else:
-            status = "dirty"
-            title  = "Cleaning Recommended"
-            detail = f"Performance is {soiling_pct:.1f}% below baseline. You're losing ₹{daily_loss_rs:.0f}/day — cleaning will pay for itself quickly."
-            color  = "#ef4444"
+            status, color = "no_evidence", "#10b981"
+            title = "Surface Probably Clean"
+            detail = (f"No statistically detectable soiling: PR is {delta:+.1f}% vs "
+                      f"baseline ({ci}) — within normal noise. Note this is inferred from "
+                      f"output, not a surface inspection.{rain_note}")
 
+        trend = pr.PR.tail(30)
+        trend_chart = [{"date": str(d.date()), "ratio": round(float(v), 3)}
+                       for d, v in trend.items()]
         return {
             "status": status, "title": title, "detail": detail, "color": color,
-            "soiling_pct": round(soiling_pct, 1),
-            "daily_loss_kwh": round(daily_loss_kwh, 2),
-            "daily_loss_rs":  round(daily_loss_rs, 0),
-            "recent_ratio":   round(recent_7, 3),
-            "baseline_ratio": round(baseline, 3),
-            "trend_chart":    trend_chart,
+            "delta_pct": round(float(delta), 1),
+            "ci_low": round(float(lo), 1), "ci_high": round(float(hi), 1),
+            "p_value": round(p, 3),
+            "days_since_rain": days_since_rain,
+            "n_recent": int(recent.size), "n_baseline": int(base.size),
+            "as_of": str(pr.index[-1].date()),
+            "trend_chart": trend_chart,
         }
     except Exception as e:
         return {"error": str(e)}

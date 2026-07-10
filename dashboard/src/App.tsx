@@ -527,13 +527,14 @@ export default function App() {
                   </div>
                 </div>
                 <div className="cleaning-stats">
-                  <div className="c-stat"><span className="c-label">Current efficiency vs baseline</span><span className="c-val" style={{color:cleaning.color}}>{cleaning.recent_ratio} / {cleaning.baseline_ratio}</span></div>
-                  <div className="c-stat"><span className="c-label">Performance drop</span><span className="c-val">{cleaning.soiling_pct}%</span></div>
-                  {cleaning.daily_loss_rs > 0 && <div className="c-stat"><span className="c-label">Daily loss from soiling</span><span className="c-val red-text">₹{cleaning.daily_loss_rs} ({cleaning.daily_loss_kwh} kWh)</span></div>}
+                  <div className="c-stat"><span className="c-label">PR vs baseline (last {cleaning.n_recent} days)</span><span className="c-val" style={{color:cleaning.color}}>{cleaning.delta_pct > 0 ? '+' : ''}{cleaning.delta_pct}%</span></div>
+                  <div className="c-stat"><span className="c-label">95% confidence interval</span><span className="c-val">{cleaning.ci_low}% … {cleaning.ci_high}%</span></div>
+                  <div className="c-stat"><span className="c-label">Evidence (p-value, lower = stronger)</span><span className="c-val">{cleaning.p_value}</span></div>
+                  <div className="c-stat"><span className="c-label">Last washing rain (&gt;5 mm)</span><span className="c-val">{cleaning.days_since_rain != null ? `${cleaning.days_since_rain} days ago` : '—'}</span></div>
                 </div>
                 {cleaning.trend_chart?.length > 0 && (
                   <div style={{marginTop:'1rem'}}>
-                    <p className="sub-label" style={{marginBottom:'0.5rem'}}>30-day efficiency trend</p>
+                    <p className="sub-label" style={{marginBottom:'0.5rem'}}>30-day performance-ratio trend (weather-corrected) · data through {cleaning.as_of}</p>
                     <ResponsiveContainer width="100%" height={140}>
                       <AreaChart data={cleaning.trend_chart}>
                         <defs><linearGradient id="gc" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={cleaning.color} stopOpacity={0.4}/><stop offset="95%" stopColor={cleaning.color} stopOpacity={0}/></linearGradient></defs>
