@@ -72,9 +72,42 @@ def get_weather_df():
         _weather_df.index = _weather_df.index.tz_localize(TZ)
     return _weather_df
 
+_wx_recent = None
+_wx_recent_at = 0.0
+
+def get_weather_recent():
+    """Hourly weather for the last few days incl. today, from the
+    Open-Meteo forecast API. weather_all.csv (archive API) lags several
+    days, so without this the physics prediction is 0 for today."""
+    global _wx_recent, _wx_recent_at
+    import time as _time
+    if _wx_recent is None or _time.time() - _wx_recent_at > 1800:
+        r = requests.get("https://api.open-meteo.com/v1/forecast", params={
+            "latitude": LAT, "longitude": LON,
+            "hourly": "shortwave_radiation,direct_normal_irradiance,"
+                      "diffuse_radiation,temperature_2m,cloud_cover,"
+                      "wind_speed_10m,precipitation",
+            "timezone": TZ, "past_days": 7, "forecast_days": 1}, timeout=20)
+        r.raise_for_status()
+        w = pd.DataFrame(r.json()["hourly"])
+        w["time"] = pd.to_datetime(w["time"])
+        w = w.set_index("time")
+        w.index = w.index.tz_localize(TZ)
+        _wx_recent, _wx_recent_at = w, _time.time()
+    return _wx_recent
+
+def get_weather_combined():
+    """Archive weather extended with recent/today rows it doesn't cover."""
+    hist = get_weather_df()
+    try:
+        rec = get_weather_recent()
+        return pd.concat([hist, rec[rec.index > hist.index.max()]])
+    except Exception:
+        return hist
+
 def pvlib_predict(idx):
     sp = pvlib.solarposition.get_solarposition(idx, LAT, LON)
-    w = get_weather_df()
+    w = get_weather_combined()
     w_sel = w.reindex(idx, method="nearest", tolerance=pd.Timedelta("35min")).dropna(subset=["shortwave_radiation"])
     common = idx.intersection(w_sel.index)
     if len(common) == 0:
