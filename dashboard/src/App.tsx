@@ -10,8 +10,99 @@ import {
   Zap, Wind, Droplets, ChevronDown, TrendingUp,
   CheckCircle, XCircle, Leaf, IndianRupee, Sparkles,
   TreePine, Fuel, Smartphone, Lightbulb,
-  Fan, Tv, Refrigerator, AirVent, CookingPot, Home, GripVertical
+  Fan, Tv, Refrigerator, AirVent, CookingPot, Home, GripVertical, Cloud
 } from 'lucide-react';
+
+// live energy-flow scene: sun/weather -> panel -> inverter -> house + grid.
+// house/grid split is not measured (no CT clamp): those paths animate but
+// carry no numbers.
+function FlowScene({ now }: { now: any }) {
+  if (!now) return null;
+  const ac = now.fresh ? now.ac_w : 0;
+  const active = ac > 20;
+  const dur = active ? Math.max(0.5, 2.6 - ac / 1500) : 0;
+  const cloudN = Math.min(3, Math.ceil((now.cloud || 0) / 34));
+  const cloudOp = 0.3 + 0.6 * (now.cloud || 0) / 100;
+  const windDur = Math.max(6, 34 - (now.wind_kmh || 0));
+  const raining = (now.rain_mm || 0) > 0.05;
+  const night = (now.sun_wm2 || 0) < 5 && !active;
+  return (
+    <div className="card flow-card">
+      <svg viewBox="0 0 860 290" className={`flow-scene${night ? ' night' : ''}`}
+           style={{['--dur' as any]: `${dur||1}s`, ['--wdur' as any]: `${windDur}s`}}>
+        {/* sun / moon */}
+        {night
+          ? <g><circle cx="110" cy="66" r="22" fill="#cbd5e1"/><circle cx="119" cy="60" r="19" fill="#111527"/></g>
+          : <g className="sun-g" opacity={1 - 0.55*(now.cloud||0)/100}>
+              <circle cx="110" cy="66" r="40" fill="#fbbf24" opacity="0.18" className="sun-glow"/>
+              <circle cx="110" cy="66" r="24" fill="#fbbf24"/>
+            </g>}
+        {/* clouds */}
+        {Array.from({length: cloudN}).map((_,i)=>(
+          <g key={i} className="cloud-g" opacity={cloudOp} style={{animationDelay:`${-i*7}s`}}>
+            <ellipse cx={150+i*80} cy={52+i*16} rx="42" ry="15" fill="#94a3b8"/>
+            <ellipse cx={185+i*80} cy={44+i*16} rx="30" ry="13" fill="#94a3b8"/>
+            <ellipse cx={120+i*80} cy={46+i*16} rx="26" ry="11" fill="#94a3b8"/>
+          </g>
+        ))}
+        {/* rain */}
+        {raining && Array.from({length: 9}).map((_,i)=>(
+          <line key={i} x1={140+i*24} y1={95} x2={135+i*24} y2={112}
+                className="raindrop" style={{animationDelay:`${(i%4)*0.22}s`}}
+                stroke="#60a5fa" strokeWidth="2" strokeLinecap="round"/>
+        ))}
+        {/* ground */}
+        <line x1="30" y1="262" x2="830" y2="262" stroke="rgba(255,255,255,0.14)" strokeWidth="2"/>
+        {/* panel */}
+        <g>
+          <polygon points="150,196 296,178 318,226 172,246" fill="#1e3a8a" stroke="#3b82f6" strokeWidth="2"/>
+          <line x1="188" y1="191" x2="209" y2="240" stroke="#3b82f6" strokeWidth="1" opacity="0.6"/>
+          <line x1="226" y1="187" x2="247" y2="235" stroke="#3b82f6" strokeWidth="1" opacity="0.6"/>
+          <line x1="264" y1="182" x2="285" y2="231" stroke="#3b82f6" strokeWidth="1" opacity="0.6"/>
+          <line x1="196" y1="246" x2="196" y2="262" stroke="#64748b" strokeWidth="3"/>
+          <line x1="292" y1="232" x2="292" y2="262" stroke="#64748b" strokeWidth="3"/>
+          <text x="232" y="282" className="fs-label" textAnchor="middle">Panels 3 kWp</text>
+        </g>
+        {/* inverter */}
+        <g>
+          <rect x="430" y="186" width="76" height="62" rx="9" fill="#1a1a2e" stroke="#6366f1" strokeWidth="2"/>
+          <circle cx="468" cy="209" r="10" fill="none" stroke="#818cf8" strokeWidth="2"/>
+          <line x1="462" y1="209" x2="474" y2="209" stroke="#818cf8" strokeWidth="2"/>
+          <text x="468" y="240" className="fs-label" textAnchor="middle" fontSize="10">Inverter</text>
+          <text x="468" y="282" className="fs-power" textAnchor="middle">{active ? `${Math.round(ac)} W AC` : night ? 'asleep' : 'idle'}</text>
+        </g>
+        {/* house */}
+        <g>
+          <polygon points="655,132 700,100 745,132" fill="none" stroke="#e2e8f0" strokeWidth="2.5"/>
+          <rect x="663" y="132" width="74" height="46" fill="none" stroke="#e2e8f0" strokeWidth="2.5" rx="2"/>
+          <rect x="692" y="150" width="16" height="28" fill="none" stroke="#e2e8f0" strokeWidth="2"/>
+          <text x="700" y="196" className="fs-label" textAnchor="middle">Home</text>
+        </g>
+        {/* grid tower */}
+        <g stroke="#94a3b8" strokeWidth="2" fill="none">
+          <line x1="686" y1="262" x2="700" y2="212"/><line x1="714" y1="262" x2="700" y2="212"/>
+          <line x1="690" y1="248" x2="710" y2="248"/><line x1="693" y1="236" x2="707" y2="236"/>
+          <line x1="678" y1="222" x2="722" y2="222"/><line x1="700" y1="212" x2="700" y2="206"/>
+          <text x="700" y="280" className="fs-label" textAnchor="middle" stroke="none">EB Grid</text>
+        </g>
+        {/* flow paths */}
+        <path d="M320,214 C 360,212 390,212 428,212" className={`flow-line${active?'':' off'}`}/>
+        <path d="M508,204 C 560,196 610,168 656,150" className={`flow-line dim${active?'':' off'}`}/>
+        <path d="M508,226 C 560,232 620,240 682,240" className={`flow-line dim${active?'':' off'}`}/>
+        {/* reg 96 ("DC power") reads below AC output - not trustworthy, so
+            no DC number is shown; AC at the inverter is the measured truth */}
+        {active && <text x="590" y="152" className="fs-note" textAnchor="middle">home + grid</text>}
+        {active && <text x="590" y="256" className="fs-note" textAnchor="middle">split not measured (no CT clamp)</text>}
+      </svg>
+      <div className="flow-caption">
+        <span><Cloud size={13}/> {now.cloud}% cloud</span>
+        <span><Droplets size={13}/> {now.rain_mm} mm/h</span>
+        <span><Wind size={13}/> {Math.round(now.wind_kmh)} km/h</span>
+        {!now.fresh && <span className="fs-stale">logger offline - scene paused</span>}
+      </div>
+    </div>
+  );
+}
 
 // typical Indian household loads, in the order solar covers them -
 // everyday loads first, AC next, grinder last (occasional use)
@@ -55,6 +146,7 @@ export default function App() {
   const [draggingId, setDraggingId] = useState<string|null>(null);
   const [impact, setImpact]     = useState<any>(null);
   const [cleaning, setCleaning] = useState<any>(null);
+  const [nowData, setNowData]   = useState<any>(null);
 
   useEffect(() => {
     const poll = () => {
@@ -63,6 +155,7 @@ export default function App() {
       )).catch(console.error);
       fetch(`${API}/yield`).then(r=>r.json())
         .then(d => { if(d?.length) setYieldToday(d[0].yield); }).catch(console.error);
+      fetch(`${API}/now`).then(r=>r.json()).then(setNowData).catch(console.error);
     };
     poll();
     const id = setInterval(poll, 5 * 60 * 1000);  // logger writes every 5 min
@@ -187,6 +280,7 @@ export default function App() {
         {/* ═══════════════════ LIVE TAB ═══════════════════ */}
         {activeTab==='live' && (
           <div className="live-layout">
+            <FlowScene now={nowData}/>
             <div className="live-stats">
               <div className="card stat-card">
                 <div className="stat-icon"><Zap size={20}/></div>

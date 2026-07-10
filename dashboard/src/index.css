@@ -201,6 +201,31 @@ header h1 { font-size: 1.65rem; font-weight: 700; letter-spacing: -0.4px; }
 .mini-btn:hover { border-color: var(--accent); }
 .mini-btn.accent { background: var(--accent); border-color: var(--accent); color: #fff; }
 
+/* ─── Live energy flow scene ─────────────────── */
+.flow-card { padding: 0.8rem 1rem 0.6rem; }
+.flow-scene { width: 100%; height: auto; display: block; }
+.flow-scene.night { filter: brightness(0.72) saturate(0.7); }
+.flow-line {
+  fill: none; stroke: #34d399; stroke-width: 3; stroke-linecap: round;
+  stroke-dasharray: 7 11;
+  animation: flowdash var(--dur) linear infinite;
+}
+.flow-line.dim { stroke: #34d399; opacity: 0.55; stroke-dasharray: 5 13; }
+.flow-line.off { animation: none; stroke: #475569; opacity: 0.35; }
+@keyframes flowdash { to { stroke-dashoffset: -36; } }
+.sun-glow { animation: sunpulse 3.5s ease-in-out infinite; transform-origin: 110px 66px; }
+@keyframes sunpulse { 0%,100% { opacity: 0.18; } 50% { opacity: 0.32; } }
+.cloud-g { animation: clouddrift var(--wdur) ease-in-out infinite alternate; }
+@keyframes clouddrift { from { transform: translateX(-14px); } to { transform: translateX(46px); } }
+.raindrop { animation: rainfall 0.85s linear infinite; }
+@keyframes rainfall { from { transform: translateY(0); opacity: 0.9; } to { transform: translateY(64px); opacity: 0; } }
+.fs-label { fill: var(--muted); font-size: 11px; }
+.fs-power { fill: #a5b4fc; font-size: 12px; font-weight: 700; }
+.fs-note { fill: var(--muted); font-size: 9.5px; font-style: italic; }
+.flow-caption { display: flex; gap: 1.2rem; padding: 6px 4px 2px; font-size: 0.78rem; color: var(--muted); align-items: center; }
+.flow-caption span { display: inline-flex; align-items: center; gap: 5px; }
+.fs-stale { color: #fbbf24; }
+
 /* ─── Forecast week chips ────────────────────── */
 .day-chips { display: flex; gap: 0.8rem; overflow-x: auto; padding-bottom: 4px; }
 .day-chip {

@@ -27,7 +27,7 @@ pretrained model; LightGBM learns only the residual.
 | 76–78 | phase current | ×0.1 A |
 | 79 | frequency | ×0.01 Hz |
 | 93 | power factor | ×0.001 |
-| 96 | DC input power | ×0.1 W |
+| 96 | DC input power (per map - but observed values fall BELOW AC output through the afternoon, so this is NOT total DC power; do not trust until identified) | ×0.1 W |
 | 109 | AC output power | W |
 | 201+202 | total yield mirror | ×0.1 kWh |
 | 90, 91 | identical/lockstep; no per-string separation available | raw |

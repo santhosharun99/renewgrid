@@ -148,6 +148,40 @@ def get_live():
     unique.sort(key=lambda x: x['ts'])
     return unique[-288:]
 
+@app.get("/now")
+def get_now():
+    """Instantaneous state for the live flow animation: latest inverter
+    reading (DC in, AC out) + this hour's weather. The house/grid split is
+    NOT known (no CT clamp) - the UI shows flow on those paths but no
+    numbers."""
+    out = {"ts": None, "ac_w": 0.0, "dc_w": 0.0, "fresh": False,
+           "cloud": 0, "rain_mm": 0.0, "wind_kmh": 0.0, "sun_wm2": 0.0}
+    try:
+        con = sqlite3.connect("solar.db")
+        r = con.execute("SELECT ts, ac_power, dc_power FROM readings "
+                        "ORDER BY ts DESC LIMIT 1").fetchone()
+        con.close()
+        if r:
+            out["ts"] = r[0]
+            out["ac_w"] = float(r[1] or 0)
+            out["dc_w"] = float(r[2] or 0)
+            age = (datetime.now() - datetime.fromisoformat(r[0])).total_seconds()
+            out["fresh"] = bool(age < 1800)
+    except Exception:
+        pass
+    try:
+        w = get_weather_recent()
+        now = pd.Timestamp.now(tz=TZ).floor("h")
+        if now in w.index:
+            row = w.loc[now]
+            out["cloud"] = int(row.cloud_cover)
+            out["rain_mm"] = float(row.precipitation)
+            out["wind_kmh"] = float(row.wind_speed_10m)
+            out["sun_wm2"] = float(row.shortwave_radiation)
+    except Exception:
+        pass
+    return out
+
 # ════════════════════════════════════════════════════════════════════
 #  HISTORICAL DAY WITH PVLIB COMPARISON
 # ════════════════════════════════════════════════════════════════════
