@@ -176,18 +176,15 @@ function ForecastScene({ wHours, fcHourly }: { wHours: any[], fcHourly: any[] })
           <rect x="345" y="162" width="170" height="100" fill="none" stroke="#e2e8f0" strokeWidth="2.5" rx="2"/>
           <rect x="412" y="206" width="34" height="56" fill="none" stroke="#e2e8f0" strokeWidth="2"/>
           <rect x="362" y="186" width="30" height="24" fill="none" stroke="#e2e8f0" strokeWidth="1.5"/>
-          <rect x="466" y="186" width="30" height="24" fill="none" stroke="#e2e8f0" strokeWidth="1.5"/>
           <polygon points="358,152 424,108 450,108 384,152" fill="#1e3a8a" stroke="#3b82f6" strokeWidth="2"/>
           <polygon points="392,152 458,108 484,108 418,152" fill="#1e3a8a" stroke="#3b82f6" strokeWidth="2"/>
-          {/* wall-mounted inverter: static wire from roof, LED shows on/off -
-              no animated flow, the power split isn't measured */}
-          <line x1="470" y1="135" x2="528" y2="200" stroke="#64748b" strokeWidth="1.5"/>
-          <rect x="522" y="200" width="28" height="38" rx="4" fill="#1a1a2e" stroke="#6366f1" strokeWidth="2"/>
-          <circle cx="536" cy="212" r="4.5" className={`inv-led${active ? ' on' : ''}`}/>
-          <line x1="529" y1="226" x2="543" y2="226" stroke="#475569" strokeWidth="2"/>
-          <line x1="529" y1="232" x2="543" y2="232" stroke="#475569" strokeWidth="2"/>
-          <text x="536" y="254" className="fs-label" textAnchor="middle" fontSize="9.5">
-            Inverter {active ? 'ON' : 'OFF'}
+          {/* inverter mounted where the second window was - LED shows on/off */}
+          <rect x="466" y="184" width="30" height="38" rx="4" fill="#1a1a2e" stroke="#6366f1" strokeWidth="2"/>
+          <circle cx="481" cy="196" r="4.5" className={`inv-led${active ? ' on' : ''}`}/>
+          <line x1="473" y1="210" x2="489" y2="210" stroke="#475569" strokeWidth="2"/>
+          <line x1="473" y1="216" x2="489" y2="216" stroke="#475569" strokeWidth="2"/>
+          <text x="481" y="236" className="fs-label" textAnchor="middle" fontSize="9.5">
+            {active ? 'ON' : 'OFF'}
           </text>
         </g>
       </svg>
