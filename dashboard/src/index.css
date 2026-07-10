@@ -130,6 +130,31 @@ header h1 { font-size: 1.65rem; font-weight: 700; letter-spacing: -0.4px; }
 .c-label { font-size: 0.78rem; color: var(--muted); }
 .c-val { font-size: 1.15rem; font-weight: 700; }
 
+/* ─── Investment recovery card ───────────────── */
+.breakeven-card { display: flex; flex-direction: column; gap: 1.25rem; }
+.breakeven-header { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; }
+.breakeven-title { display: flex; align-items: center; gap: 1.05rem; }
+.breakeven-title h3 { font-size: 1.05rem; font-weight: 600; margin-bottom: 2px; }
+.breakeven-badge {
+  padding: 6px 14px; border-radius: 999px; white-space: nowrap;
+  font-size: 0.8rem; font-weight: 600;
+  background: rgba(99,102,241,0.12); color: #818cf8;
+  border: 1px solid rgba(99,102,241,0.35);
+}
+.breakeven-badge.achieved { background: rgba(16,185,129,0.12); color: #34d399; border-color: rgba(16,185,129,0.35); }
+.progress-bar-wrap { display: flex; align-items: center; gap: 1rem; }
+.progress-bar-track { flex: 1; height: 10px; border-radius: 999px; background: rgba(255,255,255,0.07); overflow: hidden; }
+.progress-bar-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--accent), #818cf8); transition: width 0.4s ease; }
+.progress-label { font-size: 0.85rem; font-weight: 700; color: var(--text); min-width: 3.2em; text-align: right; }
+.breakeven-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 1.15rem; }
+.breakeven-stats > div {
+  display: flex; flex-direction: column; gap: 4px;
+  background: rgba(255,255,255,0.03); border: 1px solid var(--border);
+  border-radius: 12px; padding: 0.85rem 1.05rem;
+}
+.be-label { font-size: 0.76rem; color: var(--muted); }
+.be-val { font-size: 1.2rem; font-weight: 700; }
+
 /* ─── Date picker ────────────────────────────── */
 .date-row { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
 .date-picker-wrap { position: relative; }

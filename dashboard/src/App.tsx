@@ -267,19 +267,22 @@ export default function App() {
             {/* Break-even tracker */}
             <div className="card breakeven-card">
               <div className="breakeven-header">
-                <div>
-                  <h3>Investment Recovery</h3>
-                  <p className="sub-label">System cost: ₹{(savings.install_cost_rs/1000).toFixed(0)}K at ₹{savings.tariff_rs_per_kwh}/kWh effective ({savings.assumed_consumption} units assumed)</p>
+                <div className="breakeven-title">
+                  <div className="stat-icon green"><TrendingUp size={20}/></div>
+                  <div>
+                    <h3>Investment Recovery</h3>
+                    <p className="sub-label">₹{(savings.install_cost_rs/1000).toFixed(0)}K system · ₹{savings.tariff_rs_per_kwh}/kWh effective · {savings.assumed_consumption} units assumed</p>
+                  </div>
                 </div>
                 <div className={`breakeven-badge ${savings.breakeven_achieved?'achieved':''}`}>
-                  {savings.breakeven_achieved ? '🎉 Paid Off!' : `~${savings.months_to_breakeven} months left`}
+                  {savings.breakeven_achieved ? 'Paid Off' : `~${Math.round(savings.months_to_breakeven/12*10)/10} yrs left`}
                 </div>
               </div>
               <div className="progress-bar-wrap">
                 <div className="progress-bar-track">
                   <div className="progress-bar-fill" style={{width:`${savings.pct_recovered}%`}}></div>
                 </div>
-                <span className="progress-label">{savings.pct_recovered}% recovered</span>
+                <span className="progress-label">{savings.pct_recovered}%</span>
               </div>
               <div className="breakeven-stats">
                 <div><span className="be-label">Total invested</span><span className="be-val">₹{(savings.install_cost_rs/1000).toFixed(0)}K</span></div>
