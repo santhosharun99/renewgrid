@@ -8,6 +8,8 @@ import json
 import requests
 from datetime import date, timedelta
 
+import tneb
+
 app = FastAPI()
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True,
                    allow_methods=["*"], allow_headers=["*"])
@@ -144,7 +146,15 @@ def get_forecast():
 #  SAVINGS  (₹ saved vs grid)
 # ════════════════════════════════════════════════════════════════════
 @app.get("/savings")
-def get_savings():
+def get_savings(consumption: int = 600):
+    """Slab-based savings against the TNEB telescopic tariff (tneb.py).
+
+    `consumption` = assumed gross household usage per bi-monthly billing
+    cycle. There is no CT clamp, so this is an assumption the user sets
+    (estimate it from a TNEB bill), not a measurement. Solar's value under
+    telescopic slabs depends heavily on it: ~Rs 2.4/kWh at 400 units up to
+    ~Rs 10/kWh at 1000 units.
+    """
     df = get_hist()
     df_s = df.copy()
     df_s['kwh'] = df_s['power_w'] * 5/60/1000   # each row = 5-min reading
@@ -153,36 +163,61 @@ def get_savings():
     this_month_start = today.replace(day=1)
     this_year_start  = today.replace(month=1, day=1)
 
-    today_kwh  = df_s[df_s['t'].dt.date == today]['kwh'].sum()
-    month_kwh  = df_s[df_s['t'].dt.date >= this_month_start]['kwh'].sum()
-    year_kwh   = df_s[df_s['t'].dt.date >= this_year_start]['kwh'].sum()
-    total_kwh  = df_s['kwh'].sum()
+    today_kwh  = float(df_s[df_s['t'].dt.date == today]['kwh'].sum())
+    month_kwh  = float(df_s[df_s['t'].dt.date >= this_month_start]['kwh'].sum())
+    year_kwh   = float(df_s[df_s['t'].dt.date >= this_year_start]['kwh'].sum())
+    total_kwh  = float(df_s['kwh'].sum())
 
-    # Monthly breakdown for chart (last 12 months)
-    df_s['month'] = df_s['t'].dt.to_period('M')
+    # bi-monthly TNEB cycles, approximated as calendar month pairs
+    per = df_s['t'].dt.to_period('M')
+    df_s['month'] = per
+    df_s['cycle'] = [f"{p.year}-C{(p.month + 1) // 2}" for p in per]
+    cyc = df_s.groupby('cycle')['kwh'].sum()
+    cycles = [{"cycle": c, "solar_kwh": round(float(v), 1),
+               "saved_rs": tneb.savings(consumption, float(v)),
+               "eff_rate": tneb.effective_rate(consumption, float(v))}
+              for c, v in cyc.items()]
+    total_saved_rs = float(sum(c["saved_rs"] for c in cycles))
+    year_saved_rs = float(sum(c["saved_rs"] for c in cycles
+                              if c["cycle"].startswith(str(today.year))))
+
+    # blended rate on a typical full cycle, for intra-cycle displays
+    typical_cycle_kwh = float(cyc[:-1].mean()) if len(cyc) > 1 else float(cyc.mean())
+    rate = tneb.effective_rate(consumption, typical_cycle_kwh)
+
+    # monthly chart: cycle savings split across its months pro-rata by kWh
     monthly = df_s.groupby('month')['kwh'].sum().tail(12)
-    monthly_chart = [{"month": str(m), "kwh": round(v,1), "savings": round(v*TARIFF_RS_PER_KWH, 0)}
-                     for m, v in monthly.items()]
+    saved_by_cycle = {c["cycle"]: c for c in cycles}
+    monthly_chart = []
+    for m, v in monthly.items():
+        c = saved_by_cycle[f"{m.year}-C{(m.month + 1) // 2}"]
+        share = float(v) / c["solar_kwh"] if c["solar_kwh"] else 0
+        monthly_chart.append({"month": str(m), "kwh": round(float(v), 1),
+                              "savings": round(c["saved_rs"] * share, 0)})
 
-    # Break-even
-    total_saved_rs = total_kwh * TARIFF_RS_PER_KWH
-    remaining_rs   = max(0, INSTALL_COST_RS - total_saved_rs)
-    avg_monthly_rs = month_kwh * TARIFF_RS_PER_KWH   # use current month rate
-    months_to_breakeven = round(remaining_rs / max(avg_monthly_rs, 1), 1) if remaining_rs > 0 else 0
-    pct_recovered  = round(min(100, total_saved_rs / INSTALL_COST_RS * 100), 1)
+    remaining_rs = max(0.0, INSTALL_COST_RS - total_saved_rs)
+    avg_monthly_rs = (sum(m["savings"] for m in monthly_chart)
+                      / max(len(monthly_chart), 1))
+    months_to_breakeven = round(remaining_rs / max(avg_monthly_rs, 1), 1) \
+        if remaining_rs > 0 else 0.0
+    pct_recovered = round(min(100.0, total_saved_rs / INSTALL_COST_RS * 100), 1)
 
-    # float()/bool(): numpy scalars crash FastAPI's JSON encoder
     return {
-        "tariff_rs_per_kwh": TARIFF_RS_PER_KWH,
+        "tariff_rs_per_kwh": rate,          # effective, not flat
+        "assumed_consumption": consumption,
+        "tariff_note": ("TNEB telescopic slabs; assumed "
+                        f"{consumption} units gross use per bi-monthly cycle "
+                        "(no CT clamp - set this from your TNEB bill)"),
         "install_cost_rs": INSTALL_COST_RS,
-        "today_kwh":  round(float(today_kwh),  2),  "today_rs":  round(float(today_kwh)  * TARIFF_RS_PER_KWH, 2),
-        "month_kwh":  round(float(month_kwh),  2),  "month_rs":  round(float(month_kwh)  * TARIFF_RS_PER_KWH, 2),
-        "year_kwh":   round(float(year_kwh),   2),  "year_rs":   round(float(year_kwh)   * TARIFF_RS_PER_KWH, 2),
-        "total_kwh":  round(float(total_kwh),  2),  "total_rs":  round(float(total_saved_rs), 2),
-        "pct_recovered": float(pct_recovered),
-        "months_to_breakeven": float(months_to_breakeven),
+        "today_kwh":  round(today_kwh, 2),  "today_rs":  round(today_kwh * rate, 2),
+        "month_kwh":  round(month_kwh, 2),  "month_rs":  round(month_kwh * rate, 2),
+        "year_kwh":   round(year_kwh, 2),   "year_rs":   round(year_saved_rs, 2),
+        "total_kwh":  round(total_kwh, 2),  "total_rs":  round(total_saved_rs, 2),
+        "pct_recovered": pct_recovered,
+        "months_to_breakeven": months_to_breakeven,
         "breakeven_achieved": bool(remaining_rs == 0),
         "monthly_chart": monthly_chart,
+        "cycles": cycles,
     }
 
 # ════════════════════════════════════════════════════════════════════

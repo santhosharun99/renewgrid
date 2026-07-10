@@ -28,6 +28,7 @@ export default function App() {
   const [weatherData, setWeatherData]   = useState<any>(null);
 
   const [savings, setSavings]   = useState<any>(null);
+  const [consumption, setConsumption] = useState(600);  // assumed gross units / bi-monthly TNEB cycle
   const [impact, setImpact]     = useState<any>(null);
   const [cleaning, setCleaning] = useState<any>(null);
 
@@ -46,10 +47,13 @@ export default function App() {
 
     fetch(`${API}/forecast`).then(r=>r.json()).then(setForecastData).catch(console.error);
     fetch(`${API}/weather`).then(r=>r.json()).then(setWeatherData).catch(console.error);
-    fetch(`${API}/savings`).then(r=>r.json()).then(setSavings).catch(console.error);
     fetch(`${API}/impact`).then(r=>r.json()).then(setImpact).catch(console.error);
     fetch(`${API}/cleaning`).then(r=>r.json()).then(setCleaning).catch(console.error);
   }, []);
+
+  useEffect(() => {
+    fetch(`${API}/savings?consumption=${consumption}`).then(r=>r.json()).then(setSavings).catch(console.error);
+  }, [consumption]);
 
   useEffect(() => {
     if (!selDate) return;
@@ -221,6 +225,18 @@ export default function App() {
         {/* ═══════════════════ SAVINGS TAB ═══════════════════ */}
         {activeTab==='savings' && savings && (
           <div className="savings-layout">
+            {/* Assumption control — no CT clamp, so gross usage is an estimate */}
+            <div className="card" style={{display:'flex',alignItems:'center',gap:12,flexWrap:'wrap',padding:'12px 16px'}}>
+              <span style={{fontSize:13,color:'#888'}}>Your household usage (from TNEB bill, units per 2-month cycle):</span>
+              <select value={consumption} onChange={e=>setConsumption(Number(e.target.value))}
+                      style={{background:'#1a1a2e',color:'#fff',border:'1px solid #333',borderRadius:8,padding:'6px 10px'}}>
+                {[300,400,500,600,700,800,1000,1200].map(u=><option key={u} value={u}>{u} units</option>)}
+              </select>
+              <span style={{fontSize:12,color:'#666'}}>
+                Solar is worth ₹{savings.tariff_rs_per_kwh}/kWh at this usage — TNEB slabs are telescopic, so solar
+                offsets your most expensive units first. No CT clamp: usage is assumed, not measured.
+              </span>
+            </div>
             {/* Top savings stats */}
             <div className="savings-stats">
               <div className="card stat-card">
@@ -246,7 +262,7 @@ export default function App() {
               <div className="breakeven-header">
                 <div>
                   <h3>Investment Recovery</h3>
-                  <p className="sub-label">System cost: ₹{(savings.install_cost_rs/1000).toFixed(0)}K at ₹{savings.tariff_rs_per_kwh}/kWh</p>
+                  <p className="sub-label">System cost: ₹{(savings.install_cost_rs/1000).toFixed(0)}K at ₹{savings.tariff_rs_per_kwh}/kWh effective ({savings.assumed_consumption} units assumed)</p>
                 </div>
                 <div className={`breakeven-badge ${savings.breakeven_achieved?'achieved':''}`}>
                   {savings.breakeven_achieved ? '🎉 Paid Off!' : `~${savings.months_to_breakeven} months left`}
