@@ -5,6 +5,7 @@ import numpy as np
 import pvlib
 from fastapi.middleware.cors import CORSMiddleware
 import json
+import os
 import requests
 from datetime import date, timedelta
 
@@ -26,14 +27,43 @@ CO2_PER_TREE_PER_YR  = 22.0     # kg CO₂ a mature tree absorbs per year
 
 # ── Cache ─────────────────────────────────────────────────────────────
 _df_hist = None
+_hist_mtime = None
 _weather_df = None
 
 def get_hist():
-    global _df_hist
-    if _df_hist is None:
+    global _df_hist, _hist_mtime
+    m = os.path.getmtime("production.parquet")
+    if _df_hist is None or m != _hist_mtime:
         _df_hist = pd.read_parquet("production.parquet")
         _df_hist['t'] = pd.to_datetime(_df_hist['t'])
+        _hist_mtime = m
     return _df_hist
+
+def live_readings(day=None):
+    """Rows the LSW-3 logger wrote to solar.db for `day` (default: actual
+    today), shaped like production history. The app export only covers up
+    to yesterday; today comes from here."""
+    day = day or date.today()
+    try:
+        con = sqlite3.connect("solar.db")
+        df = pd.read_sql(
+            "SELECT ts, ac_power, yield_today FROM readings WHERE ts LIKE ?",
+            con, params=(f"{day}%",))
+        con.close()
+    except Exception:
+        return pd.DataFrame(columns=["t", "power_w", "yield_today"])
+    df["t"] = pd.to_datetime(df["ts"])
+    df["power_w"] = df["ac_power"].astype(float)
+    return df[["t", "power_w", "yield_today"]].sort_values("t")
+
+def get_full():
+    """Production history + live logger rows newer than the parquet."""
+    h = get_hist()
+    lv = live_readings()
+    lv = lv[lv["t"] > h["t"].max()]
+    if len(lv):
+        return pd.concat([h, lv[["t", "power_w"]]], ignore_index=True)
+    return h
 
 def get_weather_df():
     global _weather_df
@@ -67,17 +97,17 @@ def pvlib_predict(idx):
 # ════════════════════════════════════════════════════════════════════
 @app.get("/live")
 def get_live():
-    df = get_hist()
-    today = df['t'].max().date()
-    df_today = df[df['t'].dt.date == today]
-    out = [{"ts": r['t'].isoformat(), "ac_power": r['power_w']} for _, r in df_today.iterrows()]
-    try:
-        con = sqlite3.connect("solar.db")
-        df_live = pd.read_sql("SELECT ts, ac_power FROM readings", con); con.close()
-        for _, r in df_live.iterrows():
-            if r['ts'].startswith(str(today)):
-                out.append({"ts": r['ts'], "ac_power": r['ac_power']})
-    except: pass
+    """Today's curve: parquet history (if it already covers today) merged
+    with live LSW-3 readings. Falls back to the most recent day with data
+    (e.g. before dawn, when the inverter is still off)."""
+    df = get_full()
+    day = date.today()
+    df_day = df[df['t'].dt.date == day]
+    if df_day.empty:
+        day = df['t'].max().date()
+        df_day = df[df['t'].dt.date == day]
+    out = [{"ts": r.t.isoformat(), "ac_power": float(r.power_w or 0)}
+           for r in df_day.itertuples()]
     seen, unique = set(), []
     for item in out:
         k = item['ts'][:16]
@@ -92,7 +122,7 @@ def get_live():
 def get_production(day: str):
     try: target = pd.to_datetime(day).date()
     except: raise HTTPException(400, "Date must be YYYY-MM-DD")
-    df = get_hist()
+    df = get_full()
     day_df = df[df['t'].dt.date == target].copy()
     if day_df.empty: raise HTTPException(404, f"No data for {day}")
     day_df = day_df.set_index('t').sort_index()
@@ -114,7 +144,7 @@ def get_production(day: str):
 # ════════════════════════════════════════════════════════════════════
 @app.get("/available_dates")
 def available_dates():
-    df = get_hist()
+    df = get_full()
     dates = sorted(df['t'].dt.date.unique().tolist(), reverse=True)
     return [str(d) for d in dates]
 
@@ -123,10 +153,23 @@ def available_dates():
 # ════════════════════════════════════════════════════════════════════
 @app.get("/yield")
 def get_yield():
-    df = get_hist()
-    today = df['t'].max().date()
-    kwh = round(df[df['t'].dt.date == today]['power_w'].sum() / 1000, 2)
-    return [{"date": str(today), "yield": kwh}]
+    """Today's kWh. Prefers the inverter's own yield-today counter
+    (register 60) from live readings; falls back to integrating power."""
+    today = date.today()
+    lv = live_readings(today)
+    if len(lv) and lv["yield_today"].notna().any():
+        return [{"date": str(today),
+                 "yield": round(float(lv["yield_today"].max()), 1),
+                 "source": "inverter_register_60"}]
+    df = get_full()
+    d = df[df['t'].dt.date == today]
+    if d.empty:
+        day = df['t'].max().date()
+        d = df[df['t'].dt.date == day]
+        today = day
+    # 5-min watt samples -> kWh needs the 5/60 hour factor
+    kwh = round(float(d['power_w'].sum()) * 5 / 60 / 1000, 2)
+    return [{"date": str(today), "yield": kwh, "source": "integrated"}]
 
 # ════════════════════════════════════════════════════════════════════
 #  FORECAST
@@ -155,11 +198,11 @@ def get_savings(consumption: int = 600):
     telescopic slabs depends heavily on it: ~Rs 2.4/kWh at 400 units up to
     ~Rs 10/kWh at 1000 units.
     """
-    df = get_hist()
+    df = get_full()
     df_s = df.copy()
     df_s['kwh'] = df_s['power_w'] * 5/60/1000   # each row = 5-min reading
 
-    today = df_s['t'].max().date()
+    today = date.today()
     this_month_start = today.replace(day=1)
     this_year_start  = today.replace(month=1, day=1)
 
@@ -225,10 +268,10 @@ def get_savings(consumption: int = 600):
 # ════════════════════════════════════════════════════════════════════
 @app.get("/impact")
 def get_impact():
-    df = get_hist()
+    df = get_full()
     total_kwh = df['power_w'].sum() * 5/60/1000
 
-    today = df['t'].max().date()
+    today = date.today()
     this_month_start = today.replace(day=1)
     this_year_start  = today.replace(month=1, day=1)
     today_kwh  = df[df['t'].dt.date == today]['power_w'].sum() * 5/60/1000

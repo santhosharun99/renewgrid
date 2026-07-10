@@ -33,13 +33,19 @@ export default function App() {
   const [cleaning, setCleaning] = useState<any>(null);
 
   useEffect(() => {
-    fetch(`${API}/live`).then(r=>r.json()).then(data => setLiveData(
-      data.map((d:any) => ({ time: d.ts.split('T')[1].substring(0,5), power: Math.round(d.ac_power||0) }))
-    )).catch(console.error);
+    const poll = () => {
+      fetch(`${API}/live`).then(r=>r.json()).then(data => setLiveData(
+        data.map((d:any) => ({ time: d.ts.split('T')[1].substring(0,5), power: Math.round(d.ac_power||0) }))
+      )).catch(console.error);
+      fetch(`${API}/yield`).then(r=>r.json())
+        .then(d => { if(d?.length) setYieldToday(d[0].yield); }).catch(console.error);
+    };
+    poll();
+    const id = setInterval(poll, 5 * 60 * 1000);  // logger writes every 5 min
+    return () => clearInterval(id);
+  }, []);
 
-    fetch(`${API}/yield`).then(r=>r.json())
-      .then(d => { if(d?.length) setYieldToday(d[0].yield); }).catch(console.error);
-
+  useEffect(() => {
     fetch(`${API}/available_dates`).then(r=>r.json()).then((dates:string[]) => {
       setAvailDates(dates);
       if(dates.length) setSelDate(dates[0]);
@@ -196,7 +202,7 @@ export default function App() {
               </div>
             </>)}
             <div className="card chart-card full-width">
-              <div className="chart-header"><h3>Generation Forecast — Hour by Hour</h3>
+              <div className="chart-header"><h3>Generation Forecast - Hour by Hour</h3>
                 <div className="legend-inline">
                   <span className="leg-dot" style={{background:'#4f46e5',opacity:0.4}}></span>Best-Case &nbsp;
                   <span className="leg-dot" style={{background:'#6366f1'}}></span>Expected &nbsp;
@@ -225,7 +231,7 @@ export default function App() {
         {/* ═══════════════════ SAVINGS TAB ═══════════════════ */}
         {activeTab==='savings' && savings && (
           <div className="savings-layout">
-            {/* Assumption control — no CT clamp, so gross usage is an estimate */}
+            {/* Assumption control - no CT clamp, so gross usage is an estimate */}
             <div className="card" style={{display:'flex',alignItems:'center',gap:12,flexWrap:'wrap',padding:'12px 16px'}}>
               <span style={{fontSize:13,color:'#888'}}>Your household usage (from TNEB bill, units per 2-month cycle):</span>
               <select value={consumption} onChange={e=>setConsumption(Number(e.target.value))}
