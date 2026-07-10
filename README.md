@@ -28,7 +28,7 @@ pretrained model; LightGBM learns only the residual.
 | 79 | frequency | ×0.01 Hz |
 | 93 | power factor | ×0.001 |
 | 96 | DC input power (per map - but observed values fall BELOW AC output through the afternoon, so this is NOT total DC power; do not trust until identified) | ×0.1 W |
-| 109 | AC output power | W |
+| 109 | AC output power - UNRELIABLE in low sun: observed stuck near 2 kW while true output was <200 W (2026-07-10 afternoon, confirmed against cloud export + yield counter + phase currents). api.py sanity-gates it against the reg-60 counter slope | W |
 | 201+202 | total yield mirror | ×0.1 kWh |
 | 90, 91 | identical/lockstep; no per-string separation available | raw |
 | 88/89, 123, 126, 138, 145, 146 | unidentified, logged raw | raw |

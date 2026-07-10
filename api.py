@@ -42,7 +42,13 @@ def get_hist():
 def live_readings(day=None):
     """Rows the LSW-3 logger wrote to solar.db for `day` (default: actual
     today), shaped like production history. The app export only covers up
-    to yesterday; today comes from here."""
+    to yesterday; today comes from here.
+
+    Register 109 ("AC power") is untrustworthy in low sun - observed stuck
+    near 2 kW while the energy counter and phase currents showed <200 W
+    (2026-07-10 afternoon). Each reading is sanity-checked against the
+    power implied by the yield-counter slope; failures are replaced by
+    that estimate and flagged in `estimated`."""
     day = day or date.today()
     try:
         con = sqlite3.connect("solar.db")
@@ -51,10 +57,19 @@ def live_readings(day=None):
             con, params=(f"{day}%",))
         con.close()
     except Exception:
-        return pd.DataFrame(columns=["t", "power_w", "yield_today"])
+        return pd.DataFrame(columns=["t", "power_w", "yield_today", "estimated"])
     df["t"] = pd.to_datetime(df["ts"])
     df["power_w"] = df["ac_power"].astype(float)
-    return df[["t", "power_w", "yield_today"]].sort_values("t")
+    df = df.sort_values("t").reset_index(drop=True)
+    # W implied by the yield counter (0.1 kWh steps -> smooth over ~30 min)
+    hrs = df["t"].diff().dt.total_seconds() / 3600
+    inst = (df["yield_today"].diff() * 1000 / hrs).where(hrs > 0)
+    slope_w = inst.rolling(6, min_periods=2).mean()
+    bad = (df["power_w"] > 600) & slope_w.notna() \
+        & (df["power_w"] > 4 * slope_w.clip(lower=50))
+    df["estimated"] = bad
+    df.loc[bad, "power_w"] = slope_w[bad].clip(lower=0)
+    return df[["t", "power_w", "yield_today", "estimated"]]
 
 def get_full():
     """Production history + live logger rows newer than the parquet."""
@@ -154,18 +169,16 @@ def get_now():
     reading (DC in, AC out) + this hour's weather. The house/grid split is
     NOT known (no CT clamp) - the UI shows flow on those paths but no
     numbers."""
-    out = {"ts": None, "ac_w": 0.0, "dc_w": 0.0, "fresh": False,
+    out = {"ts": None, "ac_w": 0.0, "estimated": False, "fresh": False,
            "cloud": 0, "rain_mm": 0.0, "wind_kmh": 0.0, "sun_wm2": 0.0}
     try:
-        con = sqlite3.connect("solar.db")
-        r = con.execute("SELECT ts, ac_power, dc_power FROM readings "
-                        "ORDER BY ts DESC LIMIT 1").fetchone()
-        con.close()
-        if r:
-            out["ts"] = r[0]
-            out["ac_w"] = float(r[1] or 0)
-            out["dc_w"] = float(r[2] or 0)
-            age = (datetime.now() - datetime.fromisoformat(r[0])).total_seconds()
+        lv = live_readings()   # sanity-gated: reg 109 lies in low sun
+        if len(lv):
+            r = lv.iloc[-1]
+            out["ts"] = r["t"].isoformat()
+            out["ac_w"] = float(r["power_w"])
+            out["estimated"] = bool(r["estimated"])
+            age = (datetime.now() - r["t"]).total_seconds()
             out["fresh"] = bool(age < 1800)
     except Exception:
         pass

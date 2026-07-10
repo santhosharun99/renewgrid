@@ -69,7 +69,7 @@ function FlowScene({ now }: { now: any }) {
           <circle cx="468" cy="209" r="10" fill="none" stroke="#818cf8" strokeWidth="2"/>
           <line x1="462" y1="209" x2="474" y2="209" stroke="#818cf8" strokeWidth="2"/>
           <text x="468" y="240" className="fs-label" textAnchor="middle" fontSize="10">Inverter</text>
-          <text x="468" y="282" className="fs-power" textAnchor="middle">{active ? `${Math.round(ac)} W AC` : night ? 'asleep' : 'idle'}</text>
+          <text x="468" y="282" className="fs-power" textAnchor="middle">{active ? `${now.estimated ? '~' : ''}${Math.round(ac)} W AC${now.estimated ? ' (est.)' : ''}` : night ? 'asleep' : 'idle'}</text>
         </g>
         {/* house */}
         <g>
