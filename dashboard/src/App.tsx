@@ -370,7 +370,7 @@ export default function App() {
             {cleaning && !cleaning.error && (
               <div className="card cleaning-card" style={{borderLeftColor: cleaning.color}}>
                 <div className="cleaning-header">
-                  <div className="cleaning-icon" style={{background:`${cleaning.color}22`, color: cleaning.color}}><Sparkles size={20}/></div>
+                  <div className="stat-icon" style={{background:`linear-gradient(135deg, ${cleaning.color}, ${cleaning.color}99)`, boxShadow:`0 3px 12px ${cleaning.color}55`}}><Sparkles size={20}/></div>
                   <div>
                     <h3>{cleaning.title}</h3>
                     <p>{cleaning.detail}</p>
@@ -402,12 +402,12 @@ export default function App() {
             {/* Other alerts */}
             <div className="dashboard-grid">
               <div className="card alert-card warning">
-                <div className="alert-header"><AlertTriangle/><h3>Morning Shading Active</h3></div>
+                <div className="alert-header"><div className="stat-icon gold"><AlertTriangle size={20}/></div><h3>Morning Shading Active</h3></div>
                 <p>A consistent power dip is detected every morning around 07:30 AM, likely due to a nearby obstruction.</p>
                 <div className="cost-impact cost-minor">~0.4 kWh/day lost</div>
               </div>
               <div className="card alert-card info">
-                <div className="alert-header"><TrendingUp/><h3>Prediction Accuracy</h3></div>
+                <div className="alert-header"><div className="stat-icon"><TrendingUp size={20}/></div><h3>Prediction Accuracy</h3></div>
                 <p>Our physics-guided ML model is running at <strong>88.7% accuracy</strong> on daily kWh predictions across the last 15 months.</p>
                 <div className="cost-impact" style={{background:'rgba(99,102,241,0.1)',color:'#818cf8'}}>11.3% avg error</div>
               </div>

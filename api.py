@@ -391,17 +391,17 @@ def get_cleaning():
 
         if soiling_pct < 2:
             status = "clean"
-            title  = "Panels are Clean ✅"
+            title  = "Panels are Clean"
             detail = "Your panels are performing above their recent baseline. No cleaning needed right now."
             color  = "#10b981"
         elif soiling_pct < 6:
             status = "mild"
-            title  = "Mild Soiling Detected 🟡"
+            title  = "Mild Soiling Detected"
             detail = f"Performance is ~{soiling_pct:.1f}% below baseline. Cleaning is optional — you're losing about ₹{daily_loss_rs:.0f}/day."
             color  = "#f59e0b"
         else:
             status = "dirty"
-            title  = "Cleaning Recommended 🔴"
+            title  = "Cleaning Recommended"
             detail = f"Performance is {soiling_pct:.1f}% below baseline. You're losing ₹{daily_loss_rs:.0f}/day — cleaning will pay for itself quickly."
             color  = "#ef4444"
 

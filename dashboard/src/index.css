@@ -83,7 +83,7 @@ header h1 { font-size: 1.65rem; font-weight: 700; letter-spacing: -0.4px; }
 .card:hover { transform: translateY(-2px); box-shadow: 0 6px 24px rgba(0,0,0,0.22); border-color: rgba(255,255,255,0.11); }
 
 .full-width { grid-column: 1 / -1; }
-.dashboard-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1.15rem; }
+.dashboard-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1.6rem; }
 
 /* ─── Stat card ──────────────────────────────── */
 .stat-card { display: flex; align-items: center; gap: 1.15rem; }
@@ -111,6 +111,24 @@ header h1 { font-size: 1.65rem; font-weight: 700; letter-spacing: -0.4px; }
 /* ─── Live layout ────────────────────────────── */
 .live-layout { display: flex; flex-direction: column; gap: 1.15rem; }
 .live-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.15rem; }
+
+/* ─── Savings / Impact / Insights layouts ────── */
+.savings-layout, .impact-layout, .insights-layout { display: flex; flex-direction: column; gap: 1.6rem; }
+.savings-stats, .impact-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1.6rem; }
+.fun-facts-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1.6rem; }
+
+.cleaning-card { border-left: 4px solid transparent; }
+.cleaning-header { display: flex; align-items: flex-start; gap: 1.15rem; }
+.cleaning-header h3 { font-size: 1.05rem; margin-bottom: 4px; }
+.cleaning-header p { font-size: 0.86rem; color: var(--muted); line-height: 1.6; }
+.cleaning-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1.15rem; margin-top: 1.15rem; }
+.c-stat {
+  display: flex; flex-direction: column; gap: 4px;
+  background: rgba(255,255,255,0.03); border: 1px solid var(--border);
+  border-radius: 12px; padding: 0.8rem 1rem;
+}
+.c-label { font-size: 0.78rem; color: var(--muted); }
+.c-val { font-size: 1.15rem; font-weight: 700; }
 
 /* ─── Date picker ────────────────────────────── */
 .date-row { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
@@ -210,9 +228,7 @@ header h1 { font-size: 1.65rem; font-weight: 700; letter-spacing: -0.4px; }
 .alert-card { display: flex; flex-direction: column; gap: 0.85rem; }
 .alert-card.warning { border-left: 4px solid var(--amber); }
 .alert-card.info    { border-left: 4px solid var(--accent); }
-.alert-header { display: flex; align-items: center; gap: 9px; }
-.alert-card.warning .alert-header svg { color: var(--amber); }
-.alert-card.info .alert-header svg    { color: var(--accent); }
+.alert-header { display: flex; align-items: center; gap: 1rem; }
 .alert-card p { font-size: 0.86rem; color: var(--muted); line-height: 1.6; }
 .cost-impact {
   display: inline-block; font-weight: 600; color: #fb923c;
