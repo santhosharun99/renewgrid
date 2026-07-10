@@ -8,8 +8,19 @@ import {
   Activity, Sun, AlertTriangle, CalendarDays, BarChart3,
   Zap, Wind, Droplets, ChevronDown, TrendingUp,
   CheckCircle, XCircle, Leaf, IndianRupee, Sparkles,
-  TreePine, Fuel, Smartphone, Lightbulb
+  TreePine, Fuel, Smartphone, Lightbulb,
+  Fan, Tv, Refrigerator, AirVent, CookingPot, Home
 } from 'lucide-react';
+
+// typical Indian household loads, in the order solar covers them
+const APPLIANCES = [
+  { name: '2 LED Lights', watts: 20,   Icon: Lightbulb },
+  { name: '2 Ceiling Fans', watts: 150, Icon: Fan },
+  { name: 'Refrigerator', watts: 150,  Icon: Refrigerator },
+  { name: 'TV', watts: 100,            Icon: Tv },
+  { name: 'Mixer / Grinder', watts: 750, Icon: CookingPot },
+  { name: 'AC (1.5 ton)', watts: 1500, Icon: AirVent },
+];
 
 const API = 'http://localhost:8000';
 
@@ -36,7 +47,7 @@ export default function App() {
   useEffect(() => {
     const poll = () => {
       fetch(`${API}/live`).then(r=>r.json()).then(data => setLiveData(
-        data.map((d:any) => ({ time: d.ts.split('T')[1].substring(0,5), power: Math.round(d.ac_power||0) }))
+        data.map((d:any) => ({ time: d.ts.split('T')[1].substring(0,5), power: Math.round(d.ac_power||0), tsFull: d.ts }))
       )).catch(console.error);
       fetch(`${API}/yield`).then(r=>r.json())
         .then(d => { if(d?.length) setYieldToday(d[0].yield); }).catch(console.error);
@@ -77,6 +88,17 @@ export default function App() {
   const currentPower = liveData.length ? liveData[liveData.length-1].power : 0;
   const accuracy = dayData?.accuracy_pct;
 
+  // solar is "live" only if the last reading is recent — otherwise /live is
+  // showing a past day's curve (night, logger asleep) and the house is on EB
+  const lastTsFull = liveData.length ? liveData[liveData.length-1].tsFull : null;
+  const solarLive = !!lastTsFull && (Date.now() - new Date(lastTsFull).getTime()) < 30*60*1000;
+  const solarNow = solarLive ? currentPower : 0;
+  let _acc = 0;
+  const applianceRows = APPLIANCES.map(a => { _acc += a.watts; return { ...a, covered: solarNow >= _acc }; });
+  const totalLoadW = APPLIANCES.reduce((s,a)=>s+a.watts, 0);
+  const coveredCount = applianceRows.filter(a=>a.covered).length;
+  const spareW = Math.max(0, solarNow - totalLoadW);
+
   const fmtRs = (n:number) => n >= 100000 ? `₹${(n/100000).toFixed(1)}L` : n >= 1000 ? `₹${(n/1000).toFixed(1)}K` : `₹${Math.round(n)}`;
   const fmtNum = (n:number) => n >= 1000 ? `${(n/1000).toFixed(1)}K` : String(Math.round(n));
 
@@ -116,6 +138,39 @@ export default function App() {
                 <div className="stat-icon gold"><BarChart3 size={20}/></div>
                 <div className="stat-info"><p>Generated Today</p><h3>{yieldToday} kWh</h3></div>
               </div>
+            </div>
+
+            {/* What can solar power right now */}
+            <div className="card">
+              <div className="breakeven-title">
+                <div className="stat-icon"><Home size={20}/></div>
+                <div>
+                  <h3 style={{fontSize:'1.05rem',fontWeight:600,marginBottom:2}}>What can solar power right now?</h3>
+                  <p className="sub-label">Typical household loads vs live production · grid-tied, no battery — solar offsets your EB draw</p>
+                </div>
+              </div>
+              <div className="appliance-grid">
+                {applianceRows.map(a => (
+                  <div key={a.name} className="appliance-tile">
+                    <a.Icon size={20}/>
+                    <div className="appliance-info">
+                      <p>{a.name}</p>
+                      <span className="sub-label">{a.watts} W</span>
+                    </div>
+                    <span className={`app-pill ${a.covered?'solar':'eb'}`}>{a.covered?'Solar':'EB'}</span>
+                  </div>
+                ))}
+              </div>
+              {solarNow <= 20 ? (
+                <div className="power-strip eb-strip">
+                  <Zap size={15}/> Solar is idle — the house is drawing from EB right now.
+                </div>
+              ) : (
+                <div className="power-strip solar-strip">
+                  <Sun size={15}/> Producing {solarNow} W — covers {coveredCount} of {APPLIANCES.length} typical loads
+                  ({Math.min(solarNow, totalLoadW)} of {totalLoadW} W){spareW > 0 ? `, with ${spareW} W to spare` : ' — the rest draws from EB'}.
+                </div>
+              )}
             </div>
 
             <div className="date-row">

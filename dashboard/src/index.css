@@ -155,6 +155,26 @@ header h1 { font-size: 1.65rem; font-weight: 700; letter-spacing: -0.4px; }
 .be-label { font-size: 0.76rem; color: var(--muted); }
 .be-val { font-size: 1.2rem; font-weight: 700; }
 
+/* ─── "What can solar power" card ────────────── */
+.appliance-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 1.15rem; margin-top: 1.15rem; }
+.appliance-tile {
+  display: flex; align-items: center; gap: 0.8rem;
+  background: rgba(255,255,255,0.03); border: 1px solid var(--border);
+  border-radius: 12px; padding: 0.8rem 1rem;
+}
+.appliance-tile > svg { color: var(--muted); flex-shrink: 0; }
+.appliance-info { flex: 1; min-width: 0; }
+.appliance-info p { font-size: 0.85rem; font-weight: 500; }
+.app-pill { font-size: 0.72rem; font-weight: 700; padding: 3px 10px; border-radius: 999px; white-space: nowrap; }
+.app-pill.solar { background: rgba(16,185,129,0.12); color: #34d399; border: 1px solid rgba(16,185,129,0.35); }
+.app-pill.eb    { background: rgba(245,158,11,0.12); color: #fbbf24; border: 1px solid rgba(245,158,11,0.35); }
+.power-strip {
+  margin-top: 1.15rem; padding: 0.75rem 1rem; border-radius: 12px;
+  font-size: 0.85rem; display: flex; align-items: center; gap: 8px;
+}
+.power-strip.solar-strip { background: rgba(16,185,129,0.08); color: #34d399; border: 1px solid rgba(16,185,129,0.25); }
+.power-strip.eb-strip    { background: rgba(245,158,11,0.08); color: #fbbf24; border: 1px solid rgba(245,158,11,0.25); }
+
 /* ─── Date picker ────────────────────────────── */
 .date-row { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
 .date-picker-wrap { position: relative; }
