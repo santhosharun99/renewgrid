@@ -7,7 +7,8 @@ import {
 import {
   Activity, Sun, AlertTriangle, CalendarDays, BarChart3,
   Zap, Wind, Droplets, ChevronDown, TrendingUp,
-  CheckCircle, XCircle, Leaf, IndianRupee, Sparkles
+  CheckCircle, XCircle, Leaf, IndianRupee, Sparkles,
+  TreePine, Fuel, Smartphone, Lightbulb
 } from 'lucide-react';
 
 const API = 'http://localhost:8000';
@@ -326,27 +327,23 @@ export default function App() {
               </div>
             </div>
 
-            {/* Trees & fun facts */}
-            <div className="fun-facts-row">
-              <div className="card fun-fact-card">
-                <div className="fun-fact-icon">🌳</div>
-                <div className="fun-fact-val">{impact.trees_equivalent}</div>
-                <div className="fun-fact-label">Trees worth of CO₂ absorbed over {impact.op_years} yrs</div>
+            {/* Equivalents — same stat-card layout as the CO₂ row */}
+            <div className="impact-stats">
+              <div className="card stat-card">
+                <div className="stat-icon" style={{background:'linear-gradient(135deg,#166534,#22c55e)'}}><TreePine size={20}/></div>
+                <div className="stat-info"><p>Trees worth of CO₂ absorbed</p><h3>{impact.trees_equivalent}</h3><span className="sub-label">over {impact.op_years} yrs</span></div>
               </div>
-              <div className="card fun-fact-card">
-                <div className="fun-fact-icon">⛽</div>
-                <div className="fun-fact-val">{(impact.petrol_litres/1000).toFixed(1)}K L</div>
-                <div className="fun-fact-label">Petrol equivalent not burned</div>
+              <div className="card stat-card">
+                <div className="stat-icon" style={{background:'linear-gradient(135deg,#b45309,#f59e0b)'}}><Fuel size={20}/></div>
+                <div className="stat-info"><p>Petrol equivalent not burned</p><h3>{(impact.petrol_litres/1000).toFixed(1)}K L</h3></div>
               </div>
-              <div className="card fun-fact-card">
-                <div className="fun-fact-icon">📱</div>
-                <div className="fun-fact-val">{fmtNum(impact.phone_charges)}</div>
-                <div className="fun-fact-label">Smartphone charges powered</div>
+              <div className="card stat-card">
+                <div className="stat-icon" style={{background:'linear-gradient(135deg,#4f46e5,#818cf8)'}}><Smartphone size={20}/></div>
+                <div className="stat-info"><p>Smartphone charges powered</p><h3>{fmtNum(impact.phone_charges)}</h3></div>
               </div>
-              <div className="card fun-fact-card">
-                <div className="fun-fact-icon">💡</div>
-                <div className="fun-fact-val">{fmtNum(impact.led_bulb_hours)}</div>
-                <div className="fun-fact-label">Hours of LED light powered</div>
+              <div className="card stat-card">
+                <div className="stat-icon gold"><Lightbulb size={20}/></div>
+                <div className="stat-info"><p>Hours of LED light powered</p><h3>{fmtNum(impact.led_bulb_hours)}</h3></div>
               </div>
             </div>
 
