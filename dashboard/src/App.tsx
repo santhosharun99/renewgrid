@@ -179,7 +179,16 @@ function ForecastScene({ wHours, fcHourly }: { wHours: any[], fcHourly: any[] })
           <rect x="466" y="186" width="30" height="24" fill="none" stroke="#e2e8f0" strokeWidth="1.5"/>
           <polygon points="358,152 424,108 450,108 384,152" fill="#1e3a8a" stroke="#3b82f6" strokeWidth="2"/>
           <polygon points="392,152 458,108 484,108 418,152" fill="#1e3a8a" stroke="#3b82f6" strokeWidth="2"/>
-          <path d="M452,132 C 470,160 476,190 476,232" className={`flow-line${active ? '' : ' off'}`}/>
+          {/* wall-mounted inverter: static wire from roof, LED shows on/off -
+              no animated flow, the power split isn't measured */}
+          <line x1="470" y1="135" x2="528" y2="200" stroke="#64748b" strokeWidth="1.5"/>
+          <rect x="522" y="200" width="28" height="38" rx="4" fill="#1a1a2e" stroke="#6366f1" strokeWidth="2"/>
+          <circle cx="536" cy="212" r="4.5" className={`inv-led${active ? ' on' : ''}`}/>
+          <line x1="529" y1="226" x2="543" y2="226" stroke="#475569" strokeWidth="2"/>
+          <line x1="529" y1="232" x2="543" y2="232" stroke="#475569" strokeWidth="2"/>
+          <text x="536" y="254" className="fs-label" textAnchor="middle" fontSize="9.5">
+            Inverter {active ? 'ON' : 'OFF'}
+          </text>
         </g>
       </svg>
       <input type="range" className="fc-slider" min={0} max={23} value={hr}
