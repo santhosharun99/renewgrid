@@ -173,6 +173,10 @@ header h1 { font-size: 1.65rem; font-weight: 700; letter-spacing: -0.4px; }
 .a-note { font-size: 0.7rem; color: var(--muted); font-style: normal; border: 1px solid var(--border); border-radius: 999px; padding: 1px 8px; }
 .a-qty, .a-watts { color: var(--muted); }
 .row-off { opacity: 0.45; }
+.a-grip { display: inline-flex; color: var(--muted); cursor: grab; flex-shrink: 0; margin-left: -4px; }
+.a-grip:active { cursor: grabbing; }
+.a-grip:hover { color: var(--text); }
+.row-dragging { background: rgba(99,102,241,0.10); border-top: 1px solid var(--accent); border-bottom: 1px solid var(--accent); }
 .a-off-dash { font-size: 0.78rem; color: var(--muted); }
 .a-check { accent-color: var(--accent); width: 15px; height: 15px; cursor: pointer; flex-shrink: 0; }
 .a-qty-input {

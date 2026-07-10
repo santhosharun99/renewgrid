@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+
 import './index.css';
 import {
   AreaChart, Area, LineChart, Line, BarChart, Bar,
@@ -9,7 +10,7 @@ import {
   Zap, Wind, Droplets, ChevronDown, TrendingUp,
   CheckCircle, XCircle, Leaf, IndianRupee, Sparkles,
   TreePine, Fuel, Smartphone, Lightbulb,
-  Fan, Tv, Refrigerator, AirVent, CookingPot, Home
+  Fan, Tv, Refrigerator, AirVent, CookingPot, Home, GripVertical
 } from 'lucide-react';
 
 // typical Indian household loads, in the order solar covers them —
@@ -49,6 +50,8 @@ export default function App() {
   const [appliances, setAppliances] = useState<Appliance[]>(DEFAULT_APPLIANCES);
   const [showAdd, setShowAdd] = useState(false);
   const [newAppl, setNewAppl] = useState({ name: '', watts: '', qty: '1' });
+  const dragIdx = useRef<number|null>(null);
+  const [draggingId, setDraggingId] = useState<string|null>(null);
   const [impact, setImpact]     = useState<any>(null);
   const [cleaning, setCleaning] = useState<any>(null);
 
@@ -126,6 +129,17 @@ export default function App() {
       unit: w, qty: q, on: true, custom: true, Icon: Zap }]);
     setNewAppl({ name: '', watts: '', qty: '1' }); setShowAdd(false);
   };
+  const dragEnterRow = (idx:number) => {
+    const from = dragIdx.current;
+    if (from === null || from === idx) return;
+    setAppliances(prev => {
+      const arr = [...prev];
+      const [moved] = arr.splice(from, 1);
+      arr.splice(idx, 0, moved);
+      return arr;
+    });
+    dragIdx.current = idx;
+  };
 
   const fmtRs = (n:number) => n >= 100000 ? `₹${(n/100000).toFixed(1)}L` : n >= 1000 ? `₹${(n/1000).toFixed(1)}K` : `₹${Math.round(n)}`;
   const fmtNum = (n:number) => n >= 1000 ? `${(n/1000).toFixed(1)}K` : String(Math.round(n));
@@ -174,16 +188,24 @@ export default function App() {
                 <div className="stat-icon"><Home size={20}/></div>
                 <div>
                   <h3 style={{fontSize:'1.05rem',fontWeight:600,marginBottom:2}}>What can solar power right now?</h3>
-                  <p className="sub-label">Typical household loads vs live production · grid-tied, no battery — solar offsets your EB draw</p>
+                  <p className="sub-label">Typical household loads vs live production · drag ⋮⋮ to change solar priority · grid-tied, no battery — solar offsets your EB draw</p>
                 </div>
               </div>
               <div className="appliance-table">
                 <div className="appliance-row appliance-head">
                   <span>Appliance</span><span>Qty</span><span>Load</span><span>Runs on (if on now)</span>
                 </div>
-                {applianceRows.map(a => (
-                  <div key={a.id} className={`appliance-row${a.on ? '' : ' row-off'}`}>
+                {applianceRows.map((a, idx) => (
+                  <div key={a.id}
+                       className={`appliance-row${a.on ? '' : ' row-off'}${draggingId===a.id ? ' row-dragging' : ''}`}
+                       onDragEnter={()=>dragEnterRow(idx)}
+                       onDragOver={e=>e.preventDefault()}>
                     <span className="a-name">
+                      <span className="a-grip" draggable
+                            onDragStart={e=>{ dragIdx.current = idx; setDraggingId(a.id); e.dataTransfer.effectAllowed='move'; }}
+                            onDragEnd={()=>{ dragIdx.current = null; setDraggingId(null); }}>
+                        <GripVertical size={14}/>
+                      </span>
                       <input type="checkbox" className="a-check" checked={a.on} onChange={()=>toggleAppliance(a.id)}/>
                       <a.Icon size={16}/>{a.name}
                       {a.note && <em className="a-note">{a.note}</em>}
