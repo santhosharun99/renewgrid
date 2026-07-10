@@ -172,6 +172,30 @@ header h1 { font-size: 1.65rem; font-weight: 700; letter-spacing: -0.4px; }
 .a-name svg { color: var(--muted); flex-shrink: 0; }
 .a-note { font-size: 0.7rem; color: var(--muted); font-style: normal; border: 1px solid var(--border); border-radius: 999px; padding: 1px 8px; }
 .a-qty, .a-watts { color: var(--muted); }
+.row-off { opacity: 0.45; }
+.a-off-dash { font-size: 0.78rem; color: var(--muted); }
+.a-check { accent-color: var(--accent); width: 15px; height: 15px; cursor: pointer; flex-shrink: 0; }
+.a-qty-input {
+  width: 3.4em; background: rgba(255,255,255,0.05); border: 1px solid var(--border);
+  border-radius: 8px; color: var(--text); padding: 4px 6px; font-family: inherit; font-size: 0.84rem;
+}
+.a-watts-input { width: 5em; }
+.a-text-input {
+  flex: 1; min-width: 0; background: rgba(255,255,255,0.05); border: 1px solid var(--border);
+  border-radius: 8px; color: var(--text); padding: 5px 9px; font-family: inherit; font-size: 0.84rem;
+}
+.a-qty-input:focus, .a-text-input:focus { outline: none; border-color: var(--accent); }
+.add-row { cursor: pointer; transition: background 0.15s; }
+.add-row:hover { background: rgba(99,102,241,0.07); }
+.add-label { color: var(--accent); font-weight: 600; font-size: 0.84rem; }
+.add-actions { display: flex; gap: 8px; }
+.mini-btn {
+  background: rgba(255,255,255,0.05); border: 1px solid var(--border); color: var(--text);
+  border-radius: 8px; padding: 5px 13px; font-size: 0.8rem; font-weight: 600;
+  font-family: inherit; cursor: pointer; transition: border-color 0.15s, background 0.15s;
+}
+.mini-btn:hover { border-color: var(--accent); }
+.mini-btn.accent { background: var(--accent); border-color: var(--accent); color: #fff; }
 .app-pill { font-size: 0.72rem; font-weight: 700; padding: 3px 10px; border-radius: 999px; white-space: nowrap; }
 .app-pill.solar { background: rgba(16,185,129,0.12); color: #34d399; border: 1px solid rgba(16,185,129,0.35); }
 .app-pill.eb    { background: rgba(245,158,11,0.12); color: #fbbf24; border: 1px solid rgba(245,158,11,0.35); }

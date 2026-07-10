@@ -14,13 +14,17 @@ import {
 
 // typical Indian household loads, in the order solar covers them —
 // everyday loads first, AC next, grinder last (occasional use)
-const APPLIANCES = [
-  { name: 'LED Lights', qty: 2, watts: 20,   Icon: Lightbulb },
-  { name: 'Ceiling Fans', qty: 2, watts: 150, Icon: Fan },
-  { name: 'Refrigerator', qty: 1, watts: 150, Icon: Refrigerator },
-  { name: 'TV', qty: 1, watts: 100,           Icon: Tv },
-  { name: 'AC (1.5 ton)', qty: 1, watts: 1500, Icon: AirVent },
-  { name: 'Mixer / Grinder', qty: 1, watts: 750, Icon: CookingPot, note: 'occasional' },
+type Appliance = {
+  id: string; name: string; unit: number; qty: number; on: boolean;
+  custom?: boolean; note?: string; Icon: any;
+};
+const DEFAULT_APPLIANCES: Appliance[] = [
+  { id: 'light',   name: 'LED Lights',      unit: 10,   qty: 2, on: true,  Icon: Lightbulb },
+  { id: 'fan',     name: 'Ceiling Fans',    unit: 75,   qty: 2, on: true,  Icon: Fan },
+  { id: 'fridge',  name: 'Refrigerator',    unit: 150,  qty: 1, on: true,  Icon: Refrigerator },
+  { id: 'tv',      name: 'TV',              unit: 100,  qty: 1, on: true,  Icon: Tv },
+  { id: 'ac',      name: 'AC (1.5 ton)',    unit: 1500, qty: 1, on: true,  Icon: AirVent },
+  { id: 'grinder', name: 'Mixer / Grinder', unit: 750,  qty: 1, on: false, note: 'occasional', Icon: CookingPot },
 ];
 
 const API = 'http://localhost:8000';
@@ -42,6 +46,9 @@ export default function App() {
 
   const [savings, setSavings]   = useState<any>(null);
   const [consumption, setConsumption] = useState(600);  // assumed gross units / bi-monthly TNEB cycle
+  const [appliances, setAppliances] = useState<Appliance[]>(DEFAULT_APPLIANCES);
+  const [showAdd, setShowAdd] = useState(false);
+  const [newAppl, setNewAppl] = useState({ name: '', watts: '', qty: '1' });
   const [impact, setImpact]     = useState<any>(null);
   const [cleaning, setCleaning] = useState<any>(null);
 
@@ -95,13 +102,30 @@ export default function App() {
   const solarLive = !!lastTsFull && (Date.now() - new Date(lastTsFull).getTime()) < 30*60*1000;
   const solarNow = solarLive ? currentPower : 0;
   let _rem = solarNow;
-  const applianceRows = APPLIANCES.map(a => {
-    const alloc = Math.max(0, Math.min(a.watts, _rem)); _rem -= alloc;
-    return { ...a, alloc, share: Math.round(alloc / a.watts * 100) };
+  const applianceRows = appliances.map(a => {
+    const total = a.unit * a.qty;
+    if (!a.on) return { ...a, total, alloc: 0, share: 0 };
+    const alloc = Math.max(0, Math.min(total, _rem)); _rem -= alloc;
+    return { ...a, total, alloc, share: total ? Math.round(alloc / total * 100) : 0 };
   });
-  const totalLoadW = APPLIANCES.reduce((s,a)=>s+a.watts, 0);
-  const coveredCount = applianceRows.filter(a=>a.alloc === a.watts).length;
+  const activeRows = applianceRows.filter(a => a.on);
+  const totalLoadW = activeRows.reduce((s,a)=>s+a.total, 0);
+  const coveredCount = activeRows.filter(a=>a.alloc === a.total).length;
   const spareW = Math.max(0, solarNow - totalLoadW);
+
+  const toggleAppliance = (id:string) => setAppliances(prev =>
+    prev.flatMap(a => a.id !== id ? [a]
+      : a.custom && a.on ? []              // custom items are temporary — off = gone
+      : [{ ...a, on: !a.on }]));
+  const setApplianceQty = (id:string, q:number) => setAppliances(prev =>
+    prev.map(a => a.id === id ? { ...a, qty: Math.max(1, Math.min(99, q || 1)) } : a));
+  const addAppliance = () => {
+    const w = parseInt(newAppl.watts), q = Math.max(1, parseInt(newAppl.qty) || 1);
+    if (!w || w < 1) return;
+    setAppliances(prev => [...prev, { id: 'c'+Date.now(), name: newAppl.name.trim() || 'Custom load',
+      unit: w, qty: q, on: true, custom: true, Icon: Zap }]);
+    setNewAppl({ name: '', watts: '', qty: '1' }); setShowAdd(false);
+  };
 
   const fmtRs = (n:number) => n >= 100000 ? `₹${(n/100000).toFixed(1)}L` : n >= 1000 ? `₹${(n/1000).toFixed(1)}K` : `₹${Math.round(n)}`;
   const fmtNum = (n:number) => n >= 1000 ? `${(n/1000).toFixed(1)}K` : String(Math.round(n));
@@ -158,17 +182,54 @@ export default function App() {
                   <span>Appliance</span><span>Qty</span><span>Load</span><span>Runs on (if on now)</span>
                 </div>
                 {applianceRows.map(a => (
-                  <div key={a.name} className="appliance-row">
-                    <span className="a-name"><a.Icon size={16}/>{a.name}{a.note && <em className="a-note">{a.note}</em>}</span>
-                    <span className="a-qty">{a.qty}</span>
-                    <span className="a-watts">{a.watts} W</span>
+                  <div key={a.id} className={`appliance-row${a.on ? '' : ' row-off'}`}>
+                    <span className="a-name">
+                      <input type="checkbox" className="a-check" checked={a.on} onChange={()=>toggleAppliance(a.id)}/>
+                      <a.Icon size={16}/>{a.name}
+                      {a.note && <em className="a-note">{a.note}</em>}
+                      {a.custom && <em className="a-note">temporary</em>}
+                    </span>
+                    <span className="a-qty">
+                      {a.on
+                        ? <input type="number" className="a-qty-input" min={1} max={99} value={a.qty}
+                                 onChange={e=>setApplianceQty(a.id, Number(e.target.value))}/>
+                        : a.qty}
+                    </span>
+                    <span className="a-watts">{a.total} W</span>
                     <span>
-                      {a.alloc === a.watts ? <span className="app-pill solar">Solar</span>
+                      {!a.on ? <span className="a-off-dash">off</span>
+                       : a.alloc === a.total ? <span className="app-pill solar">Solar</span>
                        : a.alloc <= 0 ? <span className="app-pill eb">EB</span>
                        : <span className="app-pill partial">~{a.share}% solar · {a.share < 50 ? 'heavy load on EB' : 'rest on EB'}</span>}
                     </span>
                   </div>
                 ))}
+                {showAdd ? (
+                  <div className="appliance-row add-form">
+                    <span className="a-name">
+                      <Zap size={16}/>
+                      <input className="a-text-input" placeholder="Name (e.g. Washing machine)" value={newAppl.name}
+                             onChange={e=>setNewAppl({...newAppl, name: e.target.value})} autoFocus/>
+                    </span>
+                    <span>
+                      <input type="number" className="a-qty-input" min={1} max={99} placeholder="1" value={newAppl.qty}
+                             onChange={e=>setNewAppl({...newAppl, qty: e.target.value})}/>
+                    </span>
+                    <span>
+                      <input type="number" className="a-qty-input a-watts-input" min={1} placeholder="Watts" value={newAppl.watts}
+                             onChange={e=>setNewAppl({...newAppl, watts: e.target.value})}
+                             onKeyDown={e=>{ if(e.key==='Enter') addAppliance(); }}/>
+                    </span>
+                    <span className="add-actions">
+                      <button className="mini-btn accent" onClick={addAppliance}>Add</button>
+                      <button className="mini-btn" onClick={()=>{setShowAdd(false); setNewAppl({name:'',watts:'',qty:'1'});}}>Cancel</button>
+                    </span>
+                  </div>
+                ) : (
+                  <div className="appliance-row add-row" onClick={()=>setShowAdd(true)}>
+                    <span className="a-name add-label">+ Add appliance</span><span/><span/><span/>
+                  </div>
+                )}
               </div>
               {solarNow <= 20 ? (
                 <div className="power-strip eb-strip">
@@ -176,7 +237,7 @@ export default function App() {
                 </div>
               ) : (
                 <div className="power-strip solar-strip">
-                  <Sun size={15}/> Producing {solarNow} W — fully covers {coveredCount} of {APPLIANCES.length} loads
+                  <Sun size={15}/> Producing {solarNow} W — fully covers {coveredCount} of {activeRows.length} selected loads
                   ({Math.min(solarNow, totalLoadW)} of {totalLoadW} W){spareW > 0 ? `, with ${spareW} W to spare` : ' — the rest draws from EB'}.
                 </div>
               )}
