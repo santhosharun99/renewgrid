@@ -13,9 +13,13 @@ BASE_FEAT = ["pvlib", "poa", "poa_direct", "shortwave_radiation",
              "cloud_cover", "wind_speed_10m", "precipitation", "hour",
              "doy_sin", "doy_cos", "zenith", "azimuth", "clearness"]
 AQ_FEAT = ["pm10", "pm2_5", "aerosol_optical_depth", "dust"]
+# 3x3-grid instability features (fetch_spatial.py): NWP disagreement across
+# neighboring cells - proxy for convective/unstable local atmosphere
+SPATIAL_FEAT = ["cc_std", "cc_maxd", "ghi_std", "ghi_maxd", "t_std", "t_maxd"]
 
 
-def build(include_aq=True, exclude_events=True, daylight_poa=20):
+def build(include_aq=True, include_spatial=False, exclude_events=True,
+          daylight_poa=20):
     """-> (j, feat): hourly frame with p (actual W), pvlib (expected W),
     target (residual) and feature columns; daylight rows on usable,
     non-event days only."""
@@ -30,6 +34,11 @@ def build(include_aq=True, exclude_events=True, daylight_poa=20):
     if include_aq:
         j = j.join(physics.load_aq(), how="left")
         feat += AQ_FEAT
+    if include_spatial:
+        sp = pd.read_csv("spatial.csv", parse_dates=["time"]).set_index("time")
+        sp.index = sp.index.tz_localize(physics.TZ)
+        j = j.join(sp, how="left")
+        feat += SPATIAL_FEAT
 
     exp = physics.expected(j)
     j["pvlib"] = exp["ac"]

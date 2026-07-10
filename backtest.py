@@ -23,6 +23,33 @@ import dataset
 ALPHAS = [0.05, 0.10, 0.25, 0.50, 0.75, 0.90, 0.95]
 LGB_KW = dict(n_estimators=600, learning_rate=0.03, num_leaves=31,
               subsample=0.8, colsample_bytree=0.8, verbose=-1)
+CAL_DAYS = 45   # trailing calibration window for split-conformal (CQR)
+
+
+def conformal_band(tr, te, feat):
+    """Conformalized P10-P90 (CQR): fit on tr minus the last CAL_DAYS,
+    score on that held-out tail, stretch the test band by the empirical
+    0.8-quantile of the conformity scores. Exchangeability doesn't strictly
+    hold on time series, so this is 'approximately calibrated' - verified
+    empirically, not guaranteed."""
+    cut = tr.index.max() - pd.Timedelta(days=CAL_DAYS)
+    fit, cal = tr[tr.index <= cut], tr[tr.index > cut]
+    if len(cal) < 100 or len(fit) < 500:
+        return None
+    lo = lgb.LGBMRegressor(objective="quantile", alpha=0.1, **LGB_KW).fit(fit[feat], fit.target)
+    hi = lgb.LGBMRegressor(objective="quantile", alpha=0.9, **LGB_KW).fit(fit[feat], fit.target)
+
+    def band(df):
+        l = (df.pvlib + lo.predict(df[feat])).clip(lower=0)
+        h = (df.pvlib + hi.predict(df[feat])).clip(lower=0)
+        return l, np.maximum(l, h)
+
+    cl, ch = band(cal)
+    scores = np.maximum(cl - cal.p, cal.p - ch)
+    n = len(scores)
+    q = float(np.quantile(scores, min(1.0, np.ceil(0.8 * (n + 1)) / n)))
+    tl, th = band(te)
+    return (tl - q).clip(lower=0), th + q
 
 
 _DONOR_PROFILES = None
@@ -96,8 +123,9 @@ def daily_kwh(s):
     return s.resample("D").sum().dropna() / 1000
 
 
-def run(include_aq=True, make_plot=True, label=""):
-    j, FEAT = dataset.build(include_aq=include_aq)
+def run(include_aq=True, include_spatial=False, make_plot=True, label=""):
+    j, FEAT = dataset.build(include_aq=include_aq,
+                            include_spatial=include_spatial)
     donors = dataset.hourly_actual_all_days()
 
     months = sorted(set(j.index.to_period("M")))[6:]
@@ -121,9 +149,13 @@ def run(include_aq=True, make_plot=True, label=""):
             m.fit(tr[FEAT], tr.target)
             q[:, i] = (te.pvlib + m.predict(te[FEAT])).clip(lower=0)
         q.sort(axis=1)  # fix quantile crossing
-        qpred.append(pd.DataFrame(q, index=te.index,
-                                  columns=[f"q{int(a*100):02d}" for a in ALPHAS])
-                     .assign(actual=te.p))
+        qdf = pd.DataFrame(q, index=te.index,
+                           columns=[f"q{int(a*100):02d}" for a in ALPHAS]
+                           ).assign(actual=te.p)
+        cb = conformal_band(tr, te, FEAT)
+        if cb is not None:
+            qdf["cq10"], qdf["cq90"] = cb
+        qpred.append(qdf)
 
         a = daily_kwh(te.p)
         row = {"month": str(mth)}
@@ -156,6 +188,11 @@ def run(include_aq=True, make_plot=True, label=""):
     cov = float(((Q.actual >= Q.q10) & (Q.actual <= Q.q90)).mean())
     print(f"  P10-P90 coverage: {cov*100:.1f}%  (target 80%, miscal {cov*100-80:+.1f} pts)")
     print(f"  mean interval width P90-P10: {(Q.q90 - Q.q10).mean():.0f} W")
+    if "cq10" in Q:
+        C = Q.dropna(subset=["cq10"])
+        ccov = float(((C.actual >= C.cq10) & (C.actual <= C.cq90)).mean())
+        print(f"  CONFORMAL P10-P90 coverage: {ccov*100:.1f}%  "
+              f"(miscal {ccov*100-80:+.1f} pts)  width {(C.cq90 - C.cq10).mean():.0f} W")
 
     calib = [(a, float((Q.actual <= Q[f"q{int(a*100):02d}"]).mean())) for a in ALPHAS]
     print("  calibration (nominal -> empirical): "
@@ -163,7 +200,7 @@ def run(include_aq=True, make_plot=True, label=""):
 
     if make_plot:
         plot_calibration(calib)
-    return r, Q
+    return r, Q, derr
 
 
 def plot_calibration(calib):
@@ -186,5 +223,13 @@ def plot_calibration(calib):
 
 
 if __name__ == "__main__":
-    run(include_aq=True, label="[with AQ]")
-    run(include_aq=False, make_plot=False, label="[no AQ]")
+    r0, Q0, d0 = run(include_aq=True, label="[base]")
+    r1, Q1, d1 = run(include_aq=True, include_spatial=True,
+                     make_plot=False, label="[+spatial 3x3]")
+    dm, p = dm_test(np.concatenate(d1["hybrid_l1"]),
+                    np.concatenate(d0["hybrid_l1"]))
+    print("\n=== spatial features verdict (paired DM on daily errors) ===")
+    print(f"  base {r0.hybrid_l1.mean():.2f}%  +spatial {r1.hybrid_l1.mean():.2f}%"
+          f"   DM {dm:+.2f}  p {p:.2g}"
+          f"   ({'spatial better' if dm < 0 else 'base better'},"
+          f" {'significant' if p < 0.05 else 'NOT significant'} at 5%)")
