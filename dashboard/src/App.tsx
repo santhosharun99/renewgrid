@@ -12,14 +12,15 @@ import {
   Fan, Tv, Refrigerator, AirVent, CookingPot, Home
 } from 'lucide-react';
 
-// typical Indian household loads, in the order solar covers them
+// typical Indian household loads, in the order solar covers them —
+// everyday loads first, AC next, grinder last (occasional use)
 const APPLIANCES = [
-  { name: '2 LED Lights', watts: 20,   Icon: Lightbulb },
-  { name: '2 Ceiling Fans', watts: 150, Icon: Fan },
-  { name: 'Refrigerator', watts: 150,  Icon: Refrigerator },
-  { name: 'TV', watts: 100,            Icon: Tv },
-  { name: 'Mixer / Grinder', watts: 750, Icon: CookingPot },
-  { name: 'AC (1.5 ton)', watts: 1500, Icon: AirVent },
+  { name: 'LED Lights', qty: 2, watts: 20,   Icon: Lightbulb },
+  { name: 'Ceiling Fans', qty: 2, watts: 150, Icon: Fan },
+  { name: 'Refrigerator', qty: 1, watts: 150, Icon: Refrigerator },
+  { name: 'TV', qty: 1, watts: 100,           Icon: Tv },
+  { name: 'AC (1.5 ton)', qty: 1, watts: 1500, Icon: AirVent },
+  { name: 'Mixer / Grinder', qty: 1, watts: 750, Icon: CookingPot, note: 'occasional' },
 ];
 
 const API = 'http://localhost:8000';
@@ -93,10 +94,13 @@ export default function App() {
   const lastTsFull = liveData.length ? liveData[liveData.length-1].tsFull : null;
   const solarLive = !!lastTsFull && (Date.now() - new Date(lastTsFull).getTime()) < 30*60*1000;
   const solarNow = solarLive ? currentPower : 0;
-  let _acc = 0;
-  const applianceRows = APPLIANCES.map(a => { _acc += a.watts; return { ...a, covered: solarNow >= _acc }; });
+  let _rem = solarNow;
+  const applianceRows = APPLIANCES.map(a => {
+    const alloc = Math.max(0, Math.min(a.watts, _rem)); _rem -= alloc;
+    return { ...a, alloc, share: Math.round(alloc / a.watts * 100) };
+  });
   const totalLoadW = APPLIANCES.reduce((s,a)=>s+a.watts, 0);
-  const coveredCount = applianceRows.filter(a=>a.covered).length;
+  const coveredCount = applianceRows.filter(a=>a.alloc === a.watts).length;
   const spareW = Math.max(0, solarNow - totalLoadW);
 
   const fmtRs = (n:number) => n >= 100000 ? `₹${(n/100000).toFixed(1)}L` : n >= 1000 ? `₹${(n/1000).toFixed(1)}K` : `₹${Math.round(n)}`;
@@ -149,15 +153,20 @@ export default function App() {
                   <p className="sub-label">Typical household loads vs live production · grid-tied, no battery — solar offsets your EB draw</p>
                 </div>
               </div>
-              <div className="appliance-grid">
+              <div className="appliance-table">
+                <div className="appliance-row appliance-head">
+                  <span>Appliance</span><span>Qty</span><span>Load</span><span>Runs on (if on now)</span>
+                </div>
                 {applianceRows.map(a => (
-                  <div key={a.name} className="appliance-tile">
-                    <a.Icon size={20}/>
-                    <div className="appliance-info">
-                      <p>{a.name}</p>
-                      <span className="sub-label">{a.watts} W</span>
-                    </div>
-                    <span className={`app-pill ${a.covered?'solar':'eb'}`}>{a.covered?'Solar':'EB'}</span>
+                  <div key={a.name} className="appliance-row">
+                    <span className="a-name"><a.Icon size={16}/>{a.name}{a.note && <em className="a-note">{a.note}</em>}</span>
+                    <span className="a-qty">{a.qty}</span>
+                    <span className="a-watts">{a.watts} W</span>
+                    <span>
+                      {a.alloc === a.watts ? <span className="app-pill solar">Solar</span>
+                       : a.alloc <= 0 ? <span className="app-pill eb">EB</span>
+                       : <span className="app-pill partial">~{a.share}% solar · {a.share < 50 ? 'heavy load on EB' : 'rest on EB'}</span>}
+                    </span>
                   </div>
                 ))}
               </div>
@@ -167,7 +176,7 @@ export default function App() {
                 </div>
               ) : (
                 <div className="power-strip solar-strip">
-                  <Sun size={15}/> Producing {solarNow} W — covers {coveredCount} of {APPLIANCES.length} typical loads
+                  <Sun size={15}/> Producing {solarNow} W — fully covers {coveredCount} of {APPLIANCES.length} loads
                   ({Math.min(solarNow, totalLoadW)} of {totalLoadW} W){spareW > 0 ? `, with ${spareW} W to spare` : ' — the rest draws from EB'}.
                 </div>
               )}
