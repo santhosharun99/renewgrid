@@ -9,7 +9,7 @@ Classes and signatures:
   outage_or_fault   sustained zero power in high sun, no voltage data available
                     (the whole 646-day app-export backfill: the export has no
                     phase voltage, so the outage-vs-fault split is UNAVAILABLE
-                    there — this class says so instead of guessing)
+                    there - this class says so instead of guessing)
   underperformance  power > 0 all day but actual/expected < 0.6 on a day with
                     non-trivial expected energy
   normal            otherwise
@@ -107,7 +107,7 @@ def classify_all(df=None, db="solar.db"):
         else:
             cls = "normal"
 
-        # logger_gap days lost *data*, not production — no kWh/Rs charge
+        # logger_gap days lost *data*, not production - no kWh/Rs charge
         lost = (max(e - a, 0.0)
                 if cls not in ("normal", "logger_gap") and e > 0 else 0.0)
         out.append(dict(date=date, **{"class": cls}, n=n,
@@ -143,6 +143,6 @@ if __name__ == "__main__":
     print("\nclass counts:")
     print(r["class"].value_counts().to_string())
     print(f"\ntotal lost: {ev.lost_kwh.sum():.1f} kWh  ~Rs {ev.lost_rs.sum():.0f}"
-          f"  (at Rs {TARIFF}/kWh, indicative only — TNEB slabs are telescopic)")
+          f"  (at Rs {TARIFF}/kWh, indicative only - TNEB slabs are telescopic)")
     ev.to_csv("events.csv")
     print("saved events.csv")

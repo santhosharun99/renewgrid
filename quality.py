@@ -1,5 +1,5 @@
 """Shared data-quality gates. Every analysis imports these instead of
-re-implementing its own thresholds — analyse.py and model.py previously
+re-implementing its own thresholds - analyse.py and model.py previously
 disagreed about which days were outages because each had its own gate.
 
 Conventions:

@@ -1,4 +1,4 @@
-"""TNEB (TANGEDCO) domestic tariff — telescopic, bi-monthly.
+"""TNEB (TANGEDCO) domestic tariff - telescopic, bi-monthly.
 
 Two tiers keyed on TOTAL bi-monthly consumption:
   <= 500 units: first 200 free, 201-400 @ 4.70, 401-500 @ 6.30
@@ -9,7 +9,7 @@ Two tiers keyed on TOTAL bi-monthly consumption:
 Because the slabs are telescopic, a solar kWh displaces the household's
 MOST EXPENSIVE units first, and pushing total consumption under 500 also
 flips the tier (100 -> 200 free units). So the value of solar depends
-entirely on the assumed gross consumption — there is no flat Rs/kWh.
+entirely on the assumed gross consumption - there is no flat Rs/kWh.
 
 No CT clamp: gross consumption is an ASSUMPTION supplied by the caller,
 not a measurement. Under net metering, billed units ~= gross - solar;

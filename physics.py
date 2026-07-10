@@ -1,4 +1,4 @@
-"""The pvlib physics layer — the 'pretrained model' for this plant.
+"""The pvlib physics layer - the 'pretrained model' for this plant.
 
 Single source of truth for plant constants and the weather->power chain,
 shared by model.py, backtest.py, outage_classifier.py. Calibrated

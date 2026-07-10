@@ -13,7 +13,7 @@ import {
   Fan, Tv, Refrigerator, AirVent, CookingPot, Home, GripVertical
 } from 'lucide-react';
 
-// typical Indian household loads, in the order solar covers them —
+// typical Indian household loads, in the order solar covers them -
 // everyday loads first, AC next, grinder last (occasional use)
 type Appliance = {
   id: string; name: string; unit: number; qty: number; on: boolean;
@@ -34,7 +34,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('live');
 
   const [liveData, setLiveData]       = useState<any[]>([]);
-  const [yieldToday, setYieldToday]   = useState<string>('—');
+  const [yieldToday, setYieldToday]   = useState<string>('-');
   const [availDates, setAvailDates]   = useState<string[]>([]);
   const [selDate, setSelDate]         = useState<string>('');
   const [dayData, setDayData]         = useState<any>(null);
@@ -115,7 +115,7 @@ export default function App() {
   const accuracy = dayData?.accuracy_pct;
   const fcDay = forecastData.days?.find((d:any)=>d.date===selFcDate) ?? forecastData.days?.[0];
 
-  // solar is "live" only if the last reading is recent — otherwise /live is
+  // solar is "live" only if the last reading is recent - otherwise /live is
   // showing a past day's curve (night, logger asleep) and the house is on EB
   const lastTsFull = liveData.length ? liveData[liveData.length-1].tsFull : null;
   const solarLive = !!lastTsFull && (Date.now() - new Date(lastTsFull).getTime()) < 30*60*1000;
@@ -134,7 +134,7 @@ export default function App() {
 
   const toggleAppliance = (id:string) => setAppliances(prev =>
     prev.flatMap(a => a.id !== id ? [a]
-      : a.custom && a.on ? []              // custom items are temporary — off = gone
+      : a.custom && a.on ? []              // custom items are temporary - off = gone
       : [{ ...a, on: !a.on }]));
   const setApplianceQty = (id:string, q:number) => setAppliances(prev =>
     prev.map(a => a.id === id ? { ...a, qty: Math.max(1, Math.min(99, q || 1)) } : a));
@@ -204,7 +204,7 @@ export default function App() {
                 <div className="stat-icon"><Home size={20}/></div>
                 <div>
                   <h3 style={{fontSize:'1.05rem',fontWeight:600,marginBottom:2}}>What can solar power right now?</h3>
-                  <p className="sub-label">Typical household loads vs live production · drag ⋮⋮ to change solar priority · grid-tied, no battery — solar offsets your EB draw</p>
+                  <p className="sub-label">Typical household loads vs live production · drag ⋮⋮ to change solar priority · grid-tied, no battery - solar offsets your EB draw</p>
                 </div>
               </div>
               <div className="appliance-table">
@@ -271,12 +271,12 @@ export default function App() {
               </div>
               {solarNow <= 20 ? (
                 <div className="power-strip eb-strip">
-                  <Zap size={15}/> Solar is idle — the house is drawing from EB right now.
+                  <Zap size={15}/> Solar is idle - the house is drawing from EB right now.
                 </div>
               ) : (
                 <div className="power-strip solar-strip">
-                  <Sun size={15}/> Producing {solarNow} W — fully covers {coveredCount} of {activeRows.length} selected loads
-                  ({Math.min(solarNow, totalLoadW)} of {totalLoadW} W){spareW > 0 ? `, with ${spareW} W to spare` : ' — the rest draws from EB'}.
+                  <Sun size={15}/> Producing {solarNow} W - fully covers {coveredCount} of {activeRows.length} selected loads
+                  ({Math.min(solarNow, totalLoadW)} of {totalLoadW} W){spareW > 0 ? `, with ${spareW} W to spare` : ' - the rest draws from EB'}.
                 </div>
               )}
             </div>
@@ -349,9 +349,9 @@ export default function App() {
               </p>
             )}
             <div className="forecast-stats">
-              <div className="card stat-card"><div className="stat-icon gold"><Sun size={20}/></div><div className="stat-info"><p>Expected Generation</p><h3>{fcDay?.p50_kwh??'—'} kWh</h3><span className="sub-label">most likely · {fcDay?.date??''}</span></div></div>
-              <div className="card stat-card"><div className="stat-icon green"><Zap size={20}/></div><div className="stat-info"><p>Best-Case</p><h3>{fcDay?.p90_kwh??'—'} kWh</h3><span className="sub-label">clear skies</span></div></div>
-              <div className="card stat-card"><div className="stat-icon red"><BarChart3 size={20}/></div><div className="stat-info"><p>Worst-Case</p><h3>{fcDay?.p10_kwh??'—'} kWh</h3><span className="sub-label">cloudy / rainy</span></div></div>
+              <div className="card stat-card"><div className="stat-icon gold"><Sun size={20}/></div><div className="stat-info"><p>Expected Generation</p><h3>{fcDay?.p50_kwh??'-'} kWh</h3><span className="sub-label">most likely · {fcDay?.date??''}</span></div></div>
+              <div className="card stat-card"><div className="stat-icon green"><Zap size={20}/></div><div className="stat-info"><p>Best-Case</p><h3>{fcDay?.p90_kwh??'-'} kWh</h3><span className="sub-label">clear skies</span></div></div>
+              <div className="card stat-card"><div className="stat-icon red"><BarChart3 size={20}/></div><div className="stat-info"><p>Worst-Case</p><h3>{fcDay?.p10_kwh??'-'} kWh</h3><span className="sub-label">cloudy / rainy</span></div></div>
             </div>
             {weatherData && !weatherData.error && (<>
               <div className="card weather-hero">
@@ -418,7 +418,7 @@ export default function App() {
                 {[300,400,500,600,700,800,1000,1200].map(u=><option key={u} value={u}>{u} units</option>)}
               </select>
               <span style={{fontSize:12,color:'#666'}}>
-                Solar is worth ₹{savings.tariff_rs_per_kwh}/kWh at this usage — TNEB slabs are telescopic, so solar
+                Solar is worth ₹{savings.tariff_rs_per_kwh}/kWh at this usage - TNEB slabs are telescopic, so solar
                 offsets your most expensive units first. No CT clamp: usage is assumed, not measured.
               </span>
             </div>
@@ -508,7 +508,7 @@ export default function App() {
               </div>
             </div>
 
-            {/* Equivalents — same stat-card layout as the CO₂ row */}
+            {/* Equivalents - same stat-card layout as the CO₂ row */}
             <div className="impact-stats">
               <div className="card stat-card">
                 <div className="stat-icon" style={{background:'linear-gradient(135deg,#166534,#22c55e)'}}><TreePine size={20}/></div>
@@ -558,14 +558,14 @@ export default function App() {
                   </div>
                 </div>
                 <div className="cleaning-stats">
-                  <div className="c-stat"><span className="c-label">PR vs baseline (last {cleaning.n_recent} days)</span><span className="c-val" style={{color:cleaning.color}}>{cleaning.delta_pct > 0 ? '+' : ''}{cleaning.delta_pct}%</span></div>
-                  <div className="c-stat"><span className="c-label">95% confidence interval</span><span className="c-val">{cleaning.ci_low}% … {cleaning.ci_high}%</span></div>
-                  <div className="c-stat"><span className="c-label">Evidence (p-value, lower = stronger)</span><span className="c-val">{cleaning.p_value}</span></div>
-                  <div className="c-stat"><span className="c-label">Last washing rain (&gt;5 mm)</span><span className="c-val">{cleaning.days_since_rain != null ? `${cleaning.days_since_rain} days ago` : '—'}</span></div>
+                  <div className="c-stat"><span className="c-label">Output vs usual (last {cleaning.n_recent} days)</span><span className="c-val" style={{color:cleaning.color}}>{cleaning.delta_pct > 0 ? '+' : ''}{cleaning.delta_pct}%</span></div>
+                  <div className="c-stat"><span className="c-label">Give or take</span><span className="c-val">{cleaning.ci_low}% to {cleaning.ci_high}%</span></div>
+                  <div className="c-stat"><span className="c-label">Chance it's just weather noise</span><span className="c-val">{cleaning.noise_pct}%</span></div>
+                  <div className="c-stat"><span className="c-label">Last good rain wash</span><span className="c-val">{cleaning.days_since_rain != null ? `${cleaning.days_since_rain} days ago` : 'none recorded'}</span></div>
                 </div>
                 {cleaning.trend_chart?.length > 0 && (
                   <div style={{marginTop:'1rem'}}>
-                    <p className="sub-label" style={{marginBottom:'0.5rem'}}>30-day performance-ratio trend (weather-corrected) · data through {cleaning.as_of}</p>
+                    <p className="sub-label" style={{marginBottom:'0.5rem'}}>Output vs expected, last 30 days (1.0 = exactly as expected) · data through {cleaning.as_of}</p>
                     <ResponsiveContainer width="100%" height={140}>
                       <AreaChart data={cleaning.trend_chart}>
                         <defs><linearGradient id="gc" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={cleaning.color} stopOpacity={0.4}/><stop offset="95%" stopColor={cleaning.color} stopOpacity={0}/></linearGradient></defs>

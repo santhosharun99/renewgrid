@@ -211,7 +211,7 @@ def get_yield():
 def get_forecast():
     """7-day quantile forecast. Regenerates forecast.json when it is
     missing, doesn't start today, or is older than 4 h (weather models
-    refresh every few hours — don't predict off stale weather)."""
+    refresh every few hours - don't predict off stale weather)."""
     today = str(date.today())
     doc = None
     try:
@@ -333,7 +333,7 @@ def get_impact():
     df_sorted = df.sort_values('t')
     op_years = max(0.1, (df_sorted['t'].max() - df_sorted['t'].min()).days / 365)
 
-    # Tree equivalents — lifetime CO₂ / (22 kg/tree/year × op_years)
+    # Tree equivalents - lifetime CO₂ / (22 kg/tree/year × op_years)
     trees_equivalent = round(total_co2_kg / (CO2_PER_TREE_PER_YR * op_years), 1)
 
     # Monthly CO₂ chart
@@ -374,7 +374,7 @@ def get_cleaning():
     corrected* physics expectation, pr_daily.csv) against the prior
     30 days, with a bootstrap CI and Mann-Whitney p-value. There is no
     soiling sensor and the deposition hypothesis failed controlled
-    testing, so this can only ever say "possible"/"likely" — never a
+    testing, so this can only ever say "possible"/"likely" - never a
     confident 0% or a cleaning promise.
     """
     try:
@@ -402,32 +402,34 @@ def get_cleaning():
         rain = w.precipitation.resample("D").sum()
         washed = rain[rain > 5]
         days_since_rain = int((rain.index[-1] - washed.index[-1]).days) if len(washed) else None
-        rain_note = (f" Rain likely washed the panels {days_since_rain} day(s) ago,"
-                     " so a residual dip is probably weather or measurement noise."
+        noise_pct = round(p * 100)
+        rain_note = (f" It rained {days_since_rain} day(s) ago, which usually washes "
+                     "the panels - so a dip right now is probably not dirt."
                      if days_since_rain is not None and days_since_rain <= 3 else "")
 
-        ci = f"95% CI {lo:+.1f}% to {hi:+.1f}%"
         if delta <= -5 and p < 0.05:
             recent_kwh = float(pr.act.tail(10).mean() / 1000)
             loss_lo = max(0.0, -hi) / 100 * recent_kwh   # conservative end
             loss_hi = -lo / 100 * recent_kwh
             status, color = "likely", "#ef4444"
-            title = "Likely Soiling"
-            detail = (f"PR is {delta:.1f}% below baseline ({ci}, p={p:.3f}) — unlikely "
-                      f"to be chance. Estimated loss {loss_lo:.1f}-{loss_hi:.1f} kWh/day. "
-                      f"Cleaning may pay, but this is inference, not a surface measurement.{rain_note}")
+            title = "Panels Likely Need Cleaning"
+            detail = (f"Output has been about {-delta:.0f}% below usual for days, and "
+                      f"that's too steady to be weather. You're losing roughly "
+                      f"{loss_lo:.1f}-{loss_hi:.1f} units a day - a wash should help. "
+                      f"(Judged from output; we can't see the glass itself.){rain_note}")
         elif delta <= -2 and p < 0.25:
             status, color = "possible", "#f59e0b"
-            title = "Possible Mild Soiling"
-            detail = (f"PR is {delta:.1f}% below baseline ({ci}, p={p:.2f}). Evidence is "
-                      f"weak — this could equally be weather-data error. Recheck after a "
-                      f"few clear days before cleaning.{rain_note}")
+            title = "Possible Light Dirt"
+            detail = (f"Output is about {-delta:.0f}% below usual. It might be dirt, but "
+                      f"there's a {noise_pct}% chance it's just weather noise. Wait for a "
+                      f"few sunny days before deciding to clean.{rain_note}")
         else:
             status, color = "no_evidence", "#10b981"
             title = "Surface Probably Clean"
-            detail = (f"No statistically detectable soiling: PR is {delta:+.1f}% vs "
-                      f"baseline ({ci}) — within normal noise. Note this is inferred from "
-                      f"output, not a surface inspection.{rain_note}")
+            detail = (f"The panels are producing about what they should for this "
+                      f"weather ({delta:+.1f}% vs usual - within normal ups and downs). "
+                      f"No sign of dirt build-up. Judged from output, not by looking "
+                      f"at the glass.{rain_note}")
 
         trend = pr.PR.tail(30)
         trend_chart = [{"date": str(d.date()), "ratio": round(float(v), 3)}
@@ -436,7 +438,7 @@ def get_cleaning():
             "status": status, "title": title, "detail": detail, "color": color,
             "delta_pct": round(float(delta), 1),
             "ci_low": round(float(lo), 1), "ci_high": round(float(hi), 1),
-            "p_value": round(p, 3),
+            "p_value": round(p, 3), "noise_pct": noise_pct,
             "days_since_rain": days_since_rain,
             "n_recent": int(recent.size), "n_baseline": int(base.size),
             "as_of": str(pr.index[-1].date()),
@@ -492,7 +494,7 @@ def get_weather(day: str = ""):
         if cloud_avg < 20 and rain_total < 1:
             impact = {"level":"great","color":"#10b981","text":"Excellent day for solar! Clear skies expected. Panels will run near peak."}
         elif cloud_avg < 45:
-            impact = {"level":"good","color":"#f59e0b","text":"Mostly sunny with some clouds — around 80–90% of your best days."}
+            impact = {"level":"good","color":"#f59e0b","text":"Mostly sunny with some clouds - around 80–90% of your best days."}
         elif cloud_avg < 70:
             impact = {"level":"moderate","color":"#f97316","text":"Partly cloudy. Expect roughly 50–70% of a clear day."}
         else:

@@ -1,6 +1,6 @@
 """Alert if the logger has gone quiet during daylight.
 
-The LSW-3 stick is powered by the inverter, which shuts down at night —
+The LSW-3 stick is powered by the inverter, which shuts down at night -
 a stale max(ts) between dusk and dawn is normal, not an outage. So the
 check only fires when the sun is up (solar elevation > 5 deg).
 
@@ -41,7 +41,7 @@ def notify(msg):
 def main():
     now = datetime.datetime.now()
     if not sun_is_up(now):
-        print(f"{now:%F %T}  night — heartbeat skipped")
+        print(f"{now:%F %T}  night - heartbeat skipped")
         return 0
     con = sqlite3.connect(DB)
     row = con.execute("SELECT max(ts) FROM readings").fetchone()
@@ -54,7 +54,7 @@ def main():
     if age > STALE_MIN:
         notify(f"logger stale: last reading {last} ({age:.0f} min ago)")
         return 1
-    print(f"{now:%F %T}  ok — last reading {age:.0f} min ago")
+    print(f"{now:%F %T}  ok - last reading {age:.0f} min ago")
     return 0
 
 

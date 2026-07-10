@@ -2,7 +2,7 @@
 
 Physics first: pvlib (physics.py / params.json) is the pretrained model,
 LightGBM learns only the residual. Data gates and outage exclusion come
-from quality.py via dataset.build — never re-implement them here.
+from quality.py via dataset.build - never re-implement them here.
 For honest accuracy numbers use backtest.py (rolling-origin); the split
 here is just the last 60 days.
 """

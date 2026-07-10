@@ -1,4 +1,4 @@
-# solar — physics-guided ML for one rooftop PV plant
+# solar - physics-guided ML for one rooftop PV plant
 
 Forecasting, fault detection and attribution for a single residential
 grid-tied array in Trichy, Tamil Nadu. Physics first: `pvlib` **is** the
@@ -12,7 +12,7 @@ pretrained model; LightGBM learns only the residual.
 | Inverter | UTL 5F3 GT, 5 kW, 3-phase, grid-tied |
 | Location | 10.7905 N, 78.7047 E, Asia/Kolkata |
 | Logger | Solarman/IGEN LSW-3 stick at `192.168.29.238:8899`, logger serial `2787693150`, `mb_slave_id=1` |
-| CT clamp | **none** — consumption/grid-import data does not exist; only production is real. Do not add consumption/savings/battery features. |
+| CT clamp | **none** - consumption/grid-import data does not exist; only production is real. Do not add consumption/savings/battery features. |
 | Shading | house to the east: production step at ~07:30, costs ~0.3–0.5 kWh/day |
 
 ### Register map (holding registers, READ-ONLY)
@@ -43,7 +43,7 @@ trip thresholds. Read-only, always.
   logs to `logger_stdout.log`/`logger_stderr.log`):
   `cp com.solar.logger.plist ~/Library/LaunchAgents/ && launchctl load ~/Library/LaunchAgents/com.solar.logger.plist`
 - `heartbeat.py` (via `com.solar.heartbeat.plist`, every 30 min) alerts if
-  `max(ts)` is >30 min stale **while the sun is up** — the stick is powered
+  `max(ts)` is >30 min stale **while the sun is up** - the stick is powered
   by the inverter and is legitimately dark at night; a naive staleness check
   would false-alarm all night.
 - ⚠️ **This MacBook sleeps.** The logger must move to an always-on device
@@ -51,7 +51,7 @@ trip thresholds. Read-only, always.
   `caffeinate -is` in a terminal, or
   `sudo pmset -a sleep 0` while on mains power. Until then expect gaps.
 
-## Pipeline — run in this order
+## Pipeline - run in this order
 
 | step | script | writes |
 |---|---|---|
@@ -65,15 +65,15 @@ trip thresholds. Read-only, always.
 | 8 | `model.py` | single-split diagnostic + quantile boosters → `m10/m50/m90.txt` |
 | 9 | `backtest.py` | rolling-origin eval, baselines, DM tests → `calibration.png` |
 | 10 | `shap_attribution.py` | factor attribution → `shap_attribution.csv` |
-| — | `export_forecast.py`, `api.py`, `dashboard/` | forecast JSON + web UI (blocked on validated classifier — now unblocked) |
+| - | `export_forecast.py`, `api.py`, `dashboard/` | forecast JSON + web UI (blocked on validated classifier - now unblocked) |
 
 Shared modules (import, never re-implement):
-- `quality.py` — `usable_days` (≥130 samples), `clear_days` (vi < q40,
+- `quality.py` - `usable_days` (≥130 samples), `clear_days` (vi < q40,
   drops ≤ 2), `exclude_events` (events.csv). analyse.py and model.py once
   disagreed about which days were outages purely because each had its own
   inline gates.
-- `physics.py` — the pvlib chain + plant constants; reads `params.json`.
-- `dataset.py` — hourly modeling frame + feature list.
+- `physics.py` - the pvlib chain + plant constants; reads `params.json`.
+- `dataset.py` - hourly modeling frame + feature list.
 
 ## Headline numbers
 
@@ -82,18 +82,18 @@ daily kWh MAPE; 2026-07-10):
 
 | model | MAPE | DM test vs hybrid_l1 |
 |---|---|---|
-| **hybrid (pvlib + LGBM residual, l1, AQ features)** | **10.84%** | — |
-| pvlib alone (calibrated) | 11.13% | p = 0.096 — *not significant* |
+| **hybrid (pvlib + LGBM residual, l1, AQ features)** | **10.84%** | - |
+| pvlib alone (calibrated) | 11.13% | p = 0.096 - *not significant* |
 | hybrid (l2 objective) | 11.43% | p = 0.063 |
 | persistence (yesterday's profile) | 19.35% | p ≈ 2×10⁻¹⁴ |
 | climatology (hour × doy train mean) | 20.34% | p ≈ 4×10⁻¹⁴ |
 
 - **⚠️ Superseded claim:** the earlier "pvlib 20.56% → hybrid 12.51%,
-  wins 14/15 months" was an artifact — the old backtest scored logger-gap
+  wins 14/15 months" was an artifact - the old backtest scored logger-gap
   and outage days. On clean days the residual model adds ~0.3 MAPE points
   over physics alone and the gap is **not statistically significant**.
   The hybrid's value is proven against persistence/climatology, not pvlib.
-- Clear-day R² (top-5% VI days, sun hours): **0.9016** — unchanged by full
+- Clear-day R² (top-5% VI days, sun hours): **0.9016** - unchanged by full
   physics calibration (fitted tilt 11.8°, azim 104°, pdc0 2782 W, 7° eastern
   shade horizon, pvwatts inverter; `calibrate.py` → `params.json`).
   The physics layer is at the ceiling set by Open-Meteo irradiance noise.
@@ -105,13 +105,13 @@ daily kWh MAPE; 2026-07-10):
 - Events (677 days): 20 outage-or-fault, 10 logger gaps, 4 underperformance;
   **163 kWh ≈ ₹978** lost at ₹6/kWh (indicative; TNEB slabs are telescopic).
   Logger gaps are lost *data*, not lost production, and are not charged.
-- Air-quality features: keep — with-AQ 10.84% vs without 11.17% MAPE
+- Air-quality features: keep - with-AQ 10.84% vs without 11.17% MAPE
   (small but consistent attenuation signal; see `shap_attribution.csv`).
 
-## Standing decisions — do not re-litigate
+## Standing decisions - do not re-litigate
 
 1. **Physics first.** `pvlib` is the pretrained model. Do not pretrain on
-   other plants' public datasets — geometry/shading/inverter don't transfer.
+   other plants' public datasets - geometry/shading/inverter don't transfer.
 2. **LightGBM on the residual** (actual − pvlib), never on raw power
    (exception: the SHAP attribution model, which is explanatory, not a forecaster).
 3. **No CNN/LSTM/ConvLSTM.** Tomorrow's output is a function of tomorrow's
@@ -119,7 +119,7 @@ daily kWh MAPE; 2026-07-10):
    (Possible future exception: sky-camera nowcasting.)
 4. **Rolling-origin backtests only.** Never `train_test_split` on time series.
 5. **One model with all features; attribution via SHAP.** Never
-   one-model-per-factor — temperature correlates +0.34 with power via
+   one-model-per-factor - temperature correlates +0.34 with power via
    sunshine while its true causal effect is negative.
 6. **Every alert must distinguish plant fault / grid outage / logger gap**
    before shipping (see `outage_classifier.py`; the historical app export has
@@ -129,20 +129,20 @@ daily kWh MAPE; 2026-07-10):
    the environment and is gitignored.
 
 Also: never report R² on data including night-time zeros; distrust any
-result where RMSE < MAE (impossible — indicates a bug); if a result looks
+result where RMSE < MAE (impossible - indicates a bug); if a result looks
 surprisingly strong, hunt the confound first.
 
-## Killed hypotheses — and why (do not resurrect without new controls)
+## Killed hypotheses - and why (do not resurrect without new controls)
 
-1. **"Panels degrading 4.2%/yr"** — artifact of a naive kWh/GHI metric on a
+1. **"Panels degrading 4.2%/yr"** - artifact of a naive kWh/GHI metric on a
    cloudier second year. With clear-day gating and bootstrap over the PR
    trend the 95% CI is **[−5.79, +3.59] %/yr** → no detectable degradation.
    The metric, not the panels, was degrading.
-2. **"Cumulative dust/PM10 drives soiling"** — PM10 looked significant alone
+2. **"Cumulative dust/PM10 drives soiling"** - PM10 looked significant alone
    (p = 0.042), but after controlling for days-since-rain it collapsed to
    p = 0.827. Rain both washes panels *and* scrubs PM out of the air:
-   classic confound. Dead. (The separate *attenuation* question — does
-   today's aerosol dim today's output — is answered by SHAP in
+   classic confound. Dead. (The separate *attenuation* question - does
+   today's aerosol dim today's output - is answered by SHAP in
    `shap_attribution.py`.)
 
 These two entries are the most valuable content in this repo: both were

@@ -2,13 +2,13 @@
 
 One LightGBM on *raw* hourly power with all features (physics, weather,
 calendar, air quality) + shap.TreeExplainer. Attribution comes from SHAP on
-the single model — never one-model-per-factor (confounding: temperature
+the single model - never one-model-per-factor (confounding: temperature
 correlates +0.34 with power via sunshine while its causal effect is
 negative).
 
 This answers the *attenuation* question for aerosols (does today's AOD/PM
 reduce today's output?). The *deposition* hypothesis (cumulative dust) was
-killed separately — PM10 lost significance once days-since-rain was
+killed separately - PM10 lost significance once days-since-rain was
 controlled.
 """
 import numpy as np

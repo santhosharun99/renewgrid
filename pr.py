@@ -1,7 +1,7 @@
 """Daily Performance Ratio + degradation trend.
 
 Uses the calibrated physics layer (physics.py / params.json) for expected
-power and the shared quality gates — the old local tilt/azimuth fit and the
+power and the shared quality gates - the old local tilt/azimuth fit and the
 PR>0.5 outage heuristic are gone (events.csv is the outage authority).
 """
 import numpy as np

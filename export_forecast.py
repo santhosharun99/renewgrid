@@ -5,7 +5,7 @@ next week, builds the same feature frame the models were trained on
 (dataset.py), runs the physics layer + saved quantile boosters
 (m10/m50/m90.txt), and writes forecast.json with one entry per day.
 
-Trained on reanalysis weather, driven here by forecast weather — so
+Trained on reanalysis weather, driven here by forecast weather - so
 uncertainty grows with horizon; day 6 is genuinely less certain than
 tomorrow. api.py regenerates lazily when the file is >4 h old (weather
 models refresh every few hours).

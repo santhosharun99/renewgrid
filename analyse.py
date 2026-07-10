@@ -21,7 +21,7 @@ print("weather rows:", len(w))
 ph = df.set_index("t")["power_w"].resample("h").mean().to_frame("power_w")
 j = ph.join(w.set_index("time"), how="inner")
 
-good = quality.usable_days(df)   # shared gate — do not re-implement
+good = quality.usable_days(df)   # shared gate - do not re-implement
 
 daily = j.resample("D").agg(
     kwh=("power_w", lambda s: s.sum()/1000),

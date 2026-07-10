@@ -9,7 +9,7 @@ and on the 2026 holdout, on the same definition as the 0.903 headline
 physics.expected() picks up everywhere.
 
 Azimuth is weakly identified at 10 deg tilt (it hit the 90 deg bound in an
-earlier fit) — bounds [60, 150] and don't over-interpret the fitted value.
+earlier fit) - bounds [60, 150] and don't over-interpret the fitted value.
 """
 import json
 import numpy as np

@@ -1,6 +1,6 @@
 """Rolling-origin backtest: train on all months before M, test on month M.
 
-Point track   : LightGBM residual models with objective l1 and l2 — the
+Point track   : LightGBM residual models with objective l1 and l2 - the
                 training objective now matches the reported error metrics
                 (previously trained pinball/median but scored MAPE).
 Baselines     : pvlib alone, persistence (most recent usable day's hourly
