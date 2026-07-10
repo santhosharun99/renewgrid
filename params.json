@@ -1,0 +1,10 @@
+{
+ "tilt": 11.8,
+ "azim": 104.4,
+ "pdc0": 2782,
+ "gamma": -0.0035,
+ "temp_model": "sapm",
+ "shade_horizon": 7.0,
+ "pac0": 5000.0,
+ "inverter": true
+}

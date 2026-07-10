@@ -25,20 +25,31 @@ LGB_KW = dict(n_estimators=600, learning_rate=0.03, num_leaves=31,
               subsample=0.8, colsample_bytree=0.8, verbose=-1)
 
 
+_DONOR_PROFILES = None
+
+
+def _donor_profiles(donors):
+    """day -> {hour: W} for every usable day, built once."""
+    global _DONOR_PROFILES
+    if _DONOR_PROFILES is None:
+        g = donors.groupby(donors.index.date)
+        _DONOR_PROFILES = {d: dict(zip(s.index.hour, s.values)) for d, s in g}
+    return _DONOR_PROFILES
+
+
 def persistence_forecast(te, donors):
     """Hourly forecast for test rows: same hour of the most recent usable
     day strictly before each test day."""
-    donor_days = np.array(sorted({ts.date() for ts in donors.index}))
-    by_day = {d: donors[[ts.date() == d for ts in donors.index]] for d in donor_days}
+    prof = _donor_profiles(donors)
+    donor_days = np.array(sorted(prof))
+    te_days = pd.Series([ts.date() for ts in te.index], index=te.index)
     out = pd.Series(0.0, index=te.index)
-    for day in sorted({ts.date() for ts in te.index}):
+    for day, idx in te_days.groupby(te_days).groups.items():
         prior = donor_days[donor_days < day]
         if not len(prior):
             continue
-        prof = by_day[prior[-1]]
-        prof_by_hour = dict(zip(prof.index.hour, prof.values))
-        mask = [ts.date() == day for ts in te.index]
-        out[mask] = [prof_by_hour.get(ts.hour, 0.0) for ts in te.index[mask]]
+        p = prof[prior[-1]]
+        out[idx] = [p.get(ts.hour, 0.0) for ts in idx]
     return out
 
 
@@ -51,10 +62,11 @@ def climatology_forecast(tr, te, window=10):
     sm = ext.rolling(2 * window + 1, center=True, min_periods=1).mean()
     sm = sm.iloc[window:window + 366]
     hour_mean = tr.groupby(tr.index.hour)["p"].mean()
-    pred = [sm.at[ts.dayofyear, ts.hour]
-            if ts.hour in sm.columns and not np.isnan(sm.at[ts.dayofyear, ts.hour])
-            else hour_mean.get(ts.hour, 0.0)
-            for ts in te.index]
+    for h in sm.columns:
+        sm[h] = sm[h].fillna(hour_mean.get(h, 0.0))
+    flat = sm.stack()
+    key = pd.MultiIndex.from_arrays([te.index.dayofyear, te.index.hour])
+    pred = flat.reindex(key).fillna(0).to_numpy()
     return pd.Series(pred, index=te.index).clip(lower=0)
 
 
