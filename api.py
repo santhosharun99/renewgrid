@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import json
 import os
 import requests
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 import tneb
 
@@ -209,14 +209,31 @@ def get_yield():
 # ════════════════════════════════════════════════════════════════════
 @app.get("/forecast")
 def get_forecast():
+    """Tomorrow's quantile forecast. Regenerates forecast.json when it is
+    missing, for the wrong date, or older than 6 h."""
+    tomorrow = str(date.today() + timedelta(days=1))
+    doc = None
     try:
-        with open("forecast.json") as f: data = json.load(f)
-        return {"hourly": data, "summary": {
+        with open("forecast.json") as f: doc = json.load(f)
+        if (not isinstance(doc, dict) or doc.get("date") != tomorrow
+                or (datetime.now() - datetime.fromisoformat(doc["generated_at"])
+                    ).total_seconds() > 6 * 3600):
+            doc = None
+    except Exception:
+        doc = None
+    if doc is None:
+        try:
+            import export_forecast
+            doc = export_forecast.generate()
+        except Exception as e:
+            return {"hourly": [], "summary": {}, "error": str(e)}
+    data = doc["hourly"]
+    return {"date": doc["date"], "generated_at": doc["generated_at"],
+            "hourly": data, "summary": {
             "expected_kwh": round(sum(d['p50'] for d in data)/1000, 2),
             "worst_kwh":    round(sum(d['p10'] for d in data)/1000, 2),
             "best_kwh":     round(sum(d['p90'] for d in data)/1000, 2),
         }}
-    except: return {"hourly": [], "summary": {}}
 
 # ════════════════════════════════════════════════════════════════════
 #  SAVINGS  (₹ saved vs grid)
