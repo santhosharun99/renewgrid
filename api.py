@@ -171,16 +171,17 @@ def get_savings():
     months_to_breakeven = round(remaining_rs / max(avg_monthly_rs, 1), 1) if remaining_rs > 0 else 0
     pct_recovered  = round(min(100, total_saved_rs / INSTALL_COST_RS * 100), 1)
 
+    # float()/bool(): numpy scalars crash FastAPI's JSON encoder
     return {
         "tariff_rs_per_kwh": TARIFF_RS_PER_KWH,
         "install_cost_rs": INSTALL_COST_RS,
-        "today_kwh":  round(today_kwh,  2),  "today_rs":  round(today_kwh  * TARIFF_RS_PER_KWH, 2),
-        "month_kwh":  round(month_kwh,  2),  "month_rs":  round(month_kwh  * TARIFF_RS_PER_KWH, 2),
-        "year_kwh":   round(year_kwh,   2),  "year_rs":   round(year_kwh   * TARIFF_RS_PER_KWH, 2),
-        "total_kwh":  round(total_kwh,  2),  "total_rs":  round(total_saved_rs, 2),
-        "pct_recovered": pct_recovered,
-        "months_to_breakeven": months_to_breakeven,
-        "breakeven_achieved": remaining_rs == 0,
+        "today_kwh":  round(float(today_kwh),  2),  "today_rs":  round(float(today_kwh)  * TARIFF_RS_PER_KWH, 2),
+        "month_kwh":  round(float(month_kwh),  2),  "month_rs":  round(float(month_kwh)  * TARIFF_RS_PER_KWH, 2),
+        "year_kwh":   round(float(year_kwh),   2),  "year_rs":   round(float(year_kwh)   * TARIFF_RS_PER_KWH, 2),
+        "total_kwh":  round(float(total_kwh),  2),  "total_rs":  round(float(total_saved_rs), 2),
+        "pct_recovered": float(pct_recovered),
+        "months_to_breakeven": float(months_to_breakeven),
+        "breakeven_achieved": bool(remaining_rs == 0),
         "monthly_chart": monthly_chart,
     }
 
