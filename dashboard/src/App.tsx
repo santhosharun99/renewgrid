@@ -119,6 +119,76 @@ const DEFAULT_APPLIANCES: Appliance[] = [
   { id: 'grinder', name: 'Mixer / Grinder', unit: 750,  qty: 1, on: false, note: 'occasional', Icon: CookingPot },
 ];
 
+// forecast scene: a house with rooftop panels under the selected hour's
+// forecast weather; a 24 h slider sweeps the sun right-to-left across the sky
+function ForecastScene({ wHours, fcHourly }: { wHours: any[], fcHourly: any[] }) {
+  const [hr, setHr] = useState(12);
+  const w = wHours?.[hr];
+  if (!w) return null;
+  const p50ByHour: Record<number, number> = {};
+  (fcHourly||[]).forEach((h:any) => { p50ByHour[parseInt(h.time)] = h.p50; });
+  const pw = p50ByHour[hr] ?? 0;
+  const active = pw > 20;
+  const dayFrac = Math.max(0, Math.min(1, (hr + 0.5 - 6) / 12.5));
+  const isDay = hr >= 6 && hr <= 18;
+  const sunX = 790 - dayFrac * 680;                       // rises right, sets left
+  const sunY = 215 - Math.sin(Math.PI * dayFrac) * 155;
+  const cloudN = Math.min(3, Math.ceil((w.cloud || 0) / 34));
+  const cloudOp = 0.3 + 0.6 * (w.cloud || 0) / 100;
+  const windDur = Math.max(6, 34 - (w.wind_kmh || 0));
+  const raining = (w.rain_mm || 0) > 0.05;
+  const dur = active ? Math.max(0.5, 2.6 - pw / 1500) : 1;
+  return (
+    <div className="card flow-card" style={{position:'relative'}}>
+      <div className="fc-overlay">
+        <div className="fc-time">{String(hr).padStart(2,'0')}:00 · {w.label}</div>
+        <div className="fc-nums">
+          <span>{w.temp}°C</span>
+          <span><Cloud size={12}/> {w.cloud}%</span>
+          <span><Droplets size={12}/> {w.rain_mm} mm{(w.rain_chance||0) > 10 ? ` (${w.rain_chance}%)` : ''}</span>
+          <span><Wind size={12}/> {Math.round(w.wind_kmh)} km/h</span>
+        </div>
+        <div className="fc-pw">{active ? `~${Math.round(pw)} W expected` : 'panels asleep'}</div>
+      </div>
+      <svg viewBox="0 0 860 300" className={`flow-scene${isDay ? '' : ' night'}`}
+           style={{['--dur' as any]: `${dur}s`, ['--wdur' as any]: `${windDur}s`}}>
+        {isDay
+          ? <g className="sun-move" opacity={1 - 0.55*(w.cloud||0)/100}>
+              <circle cx={sunX} cy={sunY} r="34" fill="#fbbf24" opacity="0.18"/>
+              <circle cx={sunX} cy={sunY} r="20" fill="#fbbf24"/>
+            </g>
+          : <g><circle cx="730" cy="66" r="20" fill="#cbd5e1"/><circle cx="738" cy="60" r="17" fill="#111527"/></g>}
+        {Array.from({length: cloudN}).map((_,i)=>(
+          <g key={i} className="cloud-g" opacity={cloudOp} style={{animationDelay:`${-i*7}s`}}>
+            <ellipse cx={220+i*180} cy={56+i*13} rx="46" ry="16" fill="#94a3b8"/>
+            <ellipse cx={260+i*180} cy={47+i*13} rx="32" ry="13" fill="#94a3b8"/>
+            <ellipse cx={186+i*180} cy={49+i*13} rx="27" ry="11" fill="#94a3b8"/>
+          </g>
+        ))}
+        {raining && Array.from({length: 12}).map((_,i)=>(
+          <line key={i} x1={150+i*50} y1={92} x2={145+i*50} y2={110} className="raindrop"
+                style={{animationDelay:`${(i%5)*0.18}s`}} stroke="#60a5fa" strokeWidth="2" strokeLinecap="round"/>
+        ))}
+        <line x1="30" y1="262" x2="830" y2="262" stroke="rgba(255,255,255,0.14)" strokeWidth="2"/>
+        {/* house with rooftop panels */}
+        <g>
+          <polygon points="330,162 430,96 530,162" fill="none" stroke="#e2e8f0" strokeWidth="2.5"/>
+          <rect x="345" y="162" width="170" height="100" fill="none" stroke="#e2e8f0" strokeWidth="2.5" rx="2"/>
+          <rect x="412" y="206" width="34" height="56" fill="none" stroke="#e2e8f0" strokeWidth="2"/>
+          <rect x="362" y="186" width="30" height="24" fill="none" stroke="#e2e8f0" strokeWidth="1.5"/>
+          <rect x="466" y="186" width="30" height="24" fill="none" stroke="#e2e8f0" strokeWidth="1.5"/>
+          <polygon points="358,152 424,108 450,108 384,152" fill="#1e3a8a" stroke="#3b82f6" strokeWidth="2"/>
+          <polygon points="392,152 458,108 484,108 418,152" fill="#1e3a8a" stroke="#3b82f6" strokeWidth="2"/>
+          <path d="M452,132 C 470,160 476,190 476,232" className={`flow-line${active ? '' : ' off'}`}/>
+        </g>
+      </svg>
+      <input type="range" className="fc-slider" min={0} max={23} value={hr}
+             onChange={e=>setHr(Number(e.target.value))}/>
+      <div className="fc-ticks"><span>00:00</span><span>06:00</span><span>12:00</span><span>18:00</span><span>23:00</span></div>
+    </div>
+  );
+}
+
 const API = 'http://localhost:8000';
 
 export default function App() {
@@ -456,19 +526,7 @@ export default function App() {
                   <div className="weather-pill"><Wind size={13}/>UV {weatherData.daily?.uv_index}</div>
                 </div>
               </div>
-              <div className="card hourly-strip-card">
-                <h3>Hour-by-Hour</h3>
-                <div className="hourly-strip">
-                  {weatherData.hourly?.map((h:any,i:number)=>(
-                    <div key={i} className="hourly-slot">
-                      <span className="h-time">{h.time}</span>
-                      <span className="h-icon">{h.icon}</span>
-                      <span className="h-temp">{h.temp}°</span>
-                      {h.rain_chance>10&&<span className="h-rain">{h.rain_chance}%</span>}
-                    </div>
-                  ))}
-                </div>
-              </div>
+              <ForecastScene key={selFcDate} wHours={weatherData.hourly} fcHourly={fcDay?.hourly}/>
               <div className="card impact-banner" style={{borderLeftColor:weatherData.impact?.color}}>
                 <div className="impact-icon" style={{background:`${weatherData.impact?.color}22`,color:weatherData.impact?.color}}><Sun size={18}/></div>
                 <div><div className="impact-title">How this day's weather affects your panels</div><div className="impact-text">{weatherData.impact?.text}</div></div>

@@ -505,16 +505,15 @@ def get_weather(day: str = ""):
         r.raise_for_status(); raw = r.json()
         hourly, daily_r = raw["hourly"], raw["daily"]
         hourly_out = []
+        # full 24 h - the forecast scene slider needs night hours too
         for i, t in enumerate(hourly["time"]):
-            h = int(t[11:13])
-            if 5 <= h <= 20:
-                wc = hourly["weathercode"][i]
-                hourly_out.append({"time": t[11:16], "temp": hourly["temperature_2m"][i],
-                    "rain_chance": hourly["precipitation_probability"][i],
-                    "rain_mm": hourly["precipitation"][i], "cloud": hourly["cloud_cover"][i],
-                    "solar_rad": hourly["shortwave_radiation"][i],
-                    "wind_kmh": hourly["wind_speed_10m"][i],
-                    "icon": _wicon(wc), "label": _wlabel(wc)})
+            wc = hourly["weathercode"][i]
+            hourly_out.append({"time": t[11:16], "temp": hourly["temperature_2m"][i],
+                "rain_chance": hourly["precipitation_probability"][i],
+                "rain_mm": hourly["precipitation"][i], "cloud": hourly["cloud_cover"][i],
+                "solar_rad": hourly["shortwave_radiation"][i],
+                "wind_kmh": hourly["wind_speed_10m"][i],
+                "icon": _wicon(wc), "label": _wlabel(wc)})
         daily_out = {
             "temp_max": daily_r["temperature_2m_max"][0], "temp_min": daily_r["temperature_2m_min"][0],
             "rain_mm": daily_r["precipitation_sum"][0],
