@@ -46,10 +46,20 @@ trip thresholds. Read-only, always.
   `max(ts)` is >30 min stale **while the sun is up** - the stick is powered
   by the inverter and is legitimately dark at night; a naive staleness check
   would false-alarm all night.
-- ⚠️ **This MacBook sleeps.** The logger must move to an always-on device
-  (Raspberry Pi / old phone running Termux / small VPS + VPN home). Stopgap:
-  `caffeinate -is` in a terminal, or
-  `sudo pmset -a sleep 0` while on mains power. Until then expect gaps.
+- **Two-tier ingestion, self-healing by design.** The live logger provides
+  the real-time stream; the daily Solarman export is the authoritative
+  backfill. `load_all.py` merges each new export and permanently fills any
+  gap in the live stream (missing samples, restarts), so the historical
+  record repairs itself with no manual intervention.
+- **Deployment target: any always-on host** (Raspberry Pi, mini-PC, or a
+  small VPS with a VPN back to the LAN). The logger is pure Python +
+  `pysolarmanv5` and runs anywhere; the launchd units above are the macOS
+  reference install.
+- **The end goal: own your data, fully.** A small dedicated device logging
+  every reading straight into your own cloud closes the loop - continuous
+  collection with zero gaps and zero dependence on the vendor's servers.
+  The panels are yours, the roof is yours, and with this the data is yours
+  too.
 
 ## Pipeline - run in this order
 
