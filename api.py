@@ -164,6 +164,62 @@ def get_live():
     unique.sort(key=lambda x: x['ts'])
     return unique[-288:]
 
+@app.get("/tneb")
+def get_tneb():
+    """Measured reality from the TNEB net-metering bills (tneb_bills.csv):
+    per billing cycle, the meter's import/export + our measured generation
+    give actual household consumption and actual savings - no CT clamp
+    needed for history. gross = import + (generation - export);
+    saved = bill(gross, telescopic) - CC actually charged. Fixed charges
+    and wiped March export credits are not counted (conservative)."""
+    try:
+        bills = pd.read_csv("tneb_bills.csv", parse_dates=["start_date", "end_date"])
+    except FileNotFoundError:
+        return {"cycles": [], "note": "no tneb_bills.csv"}
+    df = get_hist()
+    span0 = df["t"].min()
+    out, tot_saved, tot_gross_days = [], 0.0, 0
+    for _, b in bills.iterrows():
+        m = (df["t"] >= b.start_date) & (df["t"] < b.end_date + pd.Timedelta(days=1))
+        gen = float(df.loc[m, "power_w"].sum() * 5 / 60 / 1000)
+        full = b.start_date >= span0
+        row = {"from": str(b.start_date.date()), "to": str(b.end_date.date()),
+               "import_units": round(float(b.import_units), 1),
+               "export_units": round(float(b.export_units), 1),
+               "billed_units": round(float(b.billed_units), 1),
+               "cc_paid_rs": float(b.cc_charges),
+               "generation_kwh": round(gen, 1) if full else None}
+        if full and gen > 0:
+            self_used = max(0.0, gen - float(b.export_units))
+            gross = float(b.import_units) + self_used
+            # a window longer than one bi-monthly cycle (meter-reading skip)
+            # must be priced as multiple cycles - telescopic slabs reset
+            n_cyc = max(1, round((b.end_date - b.start_date).days / 61))
+            no_solar_bill = tneb.bill(gross / n_cyc) * n_cyc
+            saved = round(no_solar_bill - float(b.cc_charges), 0)
+            row.update({"self_consumed_kwh": round(self_used, 1),
+                        "gross_consumption": round(gross, 1),
+                        "bill_without_solar_rs": round(no_solar_bill, 0),
+                        "saved_rs": saved})
+            tot_saved += saved
+            tot_gross_days += 1
+        out.append(row)
+    measured = [c for c in out if "saved_rs" in c]
+    avg_gross = (sum(c["gross_consumption"] for c in measured) / len(measured)
+                 if measured else None)
+    return {"cycles": out,
+            "measured_cycles": len(measured),
+            "total_saved_rs": round(tot_saved, 0),
+            "avg_gross_units_per_cycle": round(avg_gross, 0) if avg_gross else None,
+            "avg_self_consumption_pct": round(
+                100 * sum(c["self_consumed_kwh"] for c in measured)
+                / max(1e-9, sum(c["generation_kwh"] for c in measured)), 1)
+                if measured else None,
+            "note": ("savings = telescopic bill on measured gross consumption "
+                     "minus CC actually paid; fixed charges + wiped export "
+                     "credits excluded (conservative)")}
+
+
 @app.post("/consumption/reading")
 def post_consumption(body: dict):
     """Ingestion contract for a future CT clamp / energy meter (see

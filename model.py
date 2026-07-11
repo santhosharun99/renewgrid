@@ -12,7 +12,7 @@ from sklearn.metrics import mean_absolute_error
 
 import dataset
 
-j, FEAT = dataset.build(include_aq=True)
+j, FEAT = dataset.build(include_aq=True, include_spatial=True)
 
 cut = j.index.max() - pd.Timedelta(days=60)
 tr, te = j[j.index <= cut], j[j.index > cut]

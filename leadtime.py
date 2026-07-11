@@ -31,7 +31,7 @@ VARS = ["shortwave_radiation", "direct_normal_irradiance",
         "wind_speed_10m", "precipitation"]
 LEADS = [1, 2, 3, 5, 7]
 CACHE = "leadtime_weather.csv"
-FEAT = dataset.BASE_FEAT + dataset.AQ_FEAT
+FEAT = dataset.BASE_FEAT + dataset.AQ_FEAT + dataset.SPATIAL_FEAT
 
 
 def fetch():
@@ -59,6 +59,11 @@ def build_lead_frame(w_lead, d):
     j = w_lead.rename(columns={f"{v}_previous_day{d}": v for v in VARS}).copy()
     j = j.dropna(subset=["shortwave_radiation"])
     j = j.join(physics.load_aq(), how="left")          # observed AQ (see docstring)
+    # spatial disagreement from the archived (final-run) grid - an
+    # approximation of what the day-d forecast grid would have shown
+    sp = pd.read_csv("spatial.csv", parse_dates=["time"]).set_index("time")
+    sp.index = sp.index.tz_localize(physics.TZ)
+    j = j.join(sp, how="left")
     exp = physics.expected(j)
     j["pvlib"] = exp["ac"]; j["poa"] = exp["poa"]
     j["poa_direct"] = exp["poa_direct"]

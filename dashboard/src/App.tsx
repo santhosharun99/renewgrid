@@ -214,6 +214,7 @@ export default function App() {
   const [weatherData, setWeatherData]   = useState<any>(null);
 
   const [savings, setSavings]   = useState<any>(null);
+  const [tneb, setTneb]         = useState<any>(null);
   const [consumption, setConsumption] = useState(600);  // assumed gross units / bi-monthly TNEB cycle
   const [appliances, setAppliances] = useState<Appliance[]>(DEFAULT_APPLIANCES);
   const [showAdd, setShowAdd] = useState(false);
@@ -246,6 +247,7 @@ export default function App() {
 
     fetch(`${API}/impact`).then(r=>r.json()).then(setImpact).catch(console.error);
     fetch(`${API}/cleaning`).then(r=>r.json()).then(setCleaning).catch(console.error);
+    fetch(`${API}/tneb`).then(r=>r.json()).then(setTneb).catch(console.error);
   }, []);
 
   useEffect(() => {
@@ -590,6 +592,36 @@ export default function App() {
                 offsets your most expensive units first. No CT clamp: usage is assumed, not measured.
               </span>
             </div>
+            {/* Measured reality from TNEB net-metering bills */}
+            {tneb && tneb.measured_cycles > 0 && (
+              <div className="card">
+                <div className="breakeven-title" style={{marginBottom:'1rem'}}>
+                  <div className="stat-icon green"><CheckCircle size={20}/></div>
+                  <div>
+                    <h3 style={{fontSize:'1.05rem',fontWeight:600,marginBottom:2}}>Measured from your TNEB bills</h3>
+                    <p className="sub-label">Real bidirectional-meter data · {tneb.measured_cycles} billing cycles · your actual usage ≈ {tneb.avg_gross_units_per_cycle} units/cycle · {tneb.avg_self_consumption_pct}% of solar used at home, rest exported</p>
+                  </div>
+                </div>
+                <div className="breakeven-stats" style={{marginBottom:'1rem'}}>
+                  <div><span className="be-label">Actually saved (measured)</span><span className="be-val green-text">{fmtRs(tneb.total_saved_rs)}</span></div>
+                  <div><span className="be-label">Avg per cycle</span><span className="be-val">{fmtRs(tneb.total_saved_rs / tneb.measured_cycles)}</span></div>
+                  <div><span className="be-label">Method</span><span className="be-val" style={{fontSize:'0.8rem',fontWeight:500,color:'var(--muted)'}}>bill without solar - CC paid; fixed charges excluded</span></div>
+                </div>
+                <div className="appliance-table">
+                  <div className="appliance-row appliance-head">
+                    <span>Cycle</span><span>Import / Export</span><span>Paid</span><span>Saved</span>
+                  </div>
+                  {tneb.cycles.filter((c:any)=>c.saved_rs!=null).map((c:any)=>(
+                    <div key={c.to} className="appliance-row">
+                      <span className="a-name">{c.from} → {c.to}</span>
+                      <span className="a-watts">{Math.round(c.import_units)} / {Math.round(c.export_units)} u</span>
+                      <span className="a-watts">₹{Math.round(c.cc_paid_rs)}</span>
+                      <span className="green-text" style={{fontWeight:700}}>₹{Math.round(c.saved_rs)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             {/* Top savings stats */}
             <div className="savings-stats">
               <div className="card stat-card">

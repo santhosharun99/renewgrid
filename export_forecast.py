@@ -25,10 +25,13 @@ import lightgbm as lgb
 import dataset
 import physics
 
-FEAT = dataset.BASE_FEAT + dataset.AQ_FEAT
+FEAT = dataset.BASE_FEAT + dataset.AQ_FEAT + dataset.SPATIAL_FEAT
 HOURLY_W = ("shortwave_radiation,direct_normal_irradiance,diffuse_radiation,"
             "temperature_2m,cloud_cover,wind_speed_10m,precipitation")
 HOURLY_AQ = "pm10,pm2_5,aerosol_optical_depth,dust"
+SPATIAL_VARS = {"cloud_cover": "cc", "shortwave_radiation": "ghi",
+                "temperature_2m": "t"}
+GRID_D = 0.35   # deg spacing - distinct NWP cells (see fetch_spatial.py)
 # fallback when the AQ forecast doesn't reach the full horizon
 AQ_DEFAULT = {"pm10": 25.0, "pm2_5": 12.0, "aerosol_optical_depth": 0.2, "dust": 5.0}
 
@@ -46,6 +49,30 @@ def _fetch(url, hourly, d0, d1):
     return df
 
 
+def _fetch_spatial(d0, d1):
+    """3x3-grid NWP-disagreement features from the forecast API (same
+    construction as fetch_spatial.py, forecast-time edition)."""
+    lats, lons = [], []
+    for dy in (-GRID_D, 0, GRID_D):
+        for dx in (-GRID_D, 0, GRID_D):
+            lats.append(round(physics.LAT + dy, 4))
+            lons.append(round(physics.LON + dx, 4))
+    r = requests.get("https://api.open-meteo.com/v1/forecast", params={
+        "latitude": ",".join(map(str, lats)), "longitude": ",".join(map(str, lons)),
+        "hourly": ",".join(SPATIAL_VARS), "timezone": physics.TZ,
+        "start_date": str(d0), "end_date": str(d1)}, timeout=30)
+    r.raise_for_status()
+    cells = r.json()
+    time = pd.to_datetime(cells[0]["hourly"]["time"])
+    out = pd.DataFrame(index=time)
+    for v, s in SPATIAL_VARS.items():
+        m = np.array([c["hourly"][v] for c in cells], dtype=float)
+        out[f"{s}_std"] = np.nanstd(m, axis=0)
+        out[f"{s}_maxd"] = np.nanmax(np.abs(m - m[4]), axis=0)
+    out.index = out.index.tz_localize(physics.TZ)
+    return out
+
+
 def generate(days=7):
     d0 = date.today()
     d1 = d0 + timedelta(days=days - 1)
@@ -60,6 +87,11 @@ def generate(days=7):
             j[c] = np.nan
     for c, v in AQ_DEFAULT.items():
         j[c] = j[c].ffill().bfill().fillna(v)
+    try:
+        j = j.join(_fetch_spatial(d0, d1), how="left")
+    except Exception:
+        for c in dataset.SPATIAL_FEAT:
+            j[c] = np.nan   # LightGBM handles missing natively
     j = j.dropna(subset=["shortwave_radiation"])
 
     exp = physics.expected(j)
