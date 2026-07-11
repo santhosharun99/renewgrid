@@ -22,7 +22,7 @@ PDC0, GAMMA  = 2674, -0.0035
 
 # ── Config (can be user-adjusted later) ──────────────────────────────
 TARIFF_RS_PER_KWH    = 7.0      # Effective rate saved per kWh (TANGEDCO offset)
-INSTALL_COST_RS      = 180000   # Approx install cost ₹1,80,000 for 3 kWp
+INSTALL_COST_RS      = 150000   # Actual install cost ₹1,50,000 for 3 kWp
 CO2_KG_PER_KWH       = 0.82     # India grid emission factor (CEA 2022-23)
 CO2_PER_TREE_PER_YR  = 22.0     # kg CO₂ a mature tree absorbs per year
 
@@ -164,46 +164,62 @@ def get_live():
     unique.sort(key=lambda x: x['ts'])
     return unique[-288:]
 
-@app.get("/tneb")
-def get_tneb():
+def _tneb_cycles():
     """Measured reality from the TNEB net-metering bills (tneb_bills.csv):
     per billing cycle, the meter's import/export + our measured generation
     give actual household consumption and actual savings - no CT clamp
     needed for history. gross = import + (generation - export);
     saved = bill(gross, telescopic) - CC actually charged. Fixed charges
-    and wiped March export credits are not counted (conservative)."""
+    and wiped March export credits are not counted (conservative).
+    Historical cycles are priced at the CURRENT (May-2026) tariff - the
+    pre-May rate table is not on file."""
     try:
         bills = pd.read_csv("tneb_bills.csv", parse_dates=["start_date", "end_date"])
     except FileNotFoundError:
-        return {"cycles": [], "note": "no tneb_bills.csv"}
+        return []
     df = get_hist()
     span0 = df["t"].min()
-    out, tot_saved, tot_gross_days = [], 0.0, 0
+    out = []
     for _, b in bills.iterrows():
         m = (df["t"] >= b.start_date) & (df["t"] < b.end_date + pd.Timedelta(days=1))
         gen = float(df.loc[m, "power_w"].sum() * 5 / 60 / 1000)
-        full = b.start_date >= span0
+        win_days = max(1, (b.end_date - b.start_date).days)
+        ov0 = max(b.start_date, span0)
+        overlap = max(0, (b.end_date - ov0).days)
+        estimated = overlap < win_days
+        if overlap >= 0.9 * win_days and overlap < win_days:
+            gen = gen * win_days / overlap          # scale a small gap
         row = {"from": str(b.start_date.date()), "to": str(b.end_date.date()),
+               "start": b.start_date, "end": b.end_date,
                "import_units": round(float(b.import_units), 1),
                "export_units": round(float(b.export_units), 1),
                "billed_units": round(float(b.billed_units), 1),
                "cc_paid_rs": float(b.cc_charges),
-               "generation_kwh": round(gen, 1) if full else None}
-        if full and gen > 0:
+               "estimated": bool(estimated),
+               "generation_kwh": round(gen, 1) if overlap >= 0.9 * win_days else None}
+        if row["generation_kwh"] and gen > 0:
             self_used = max(0.0, gen - float(b.export_units))
             gross = float(b.import_units) + self_used
             # a window longer than one bi-monthly cycle (meter-reading skip)
             # must be priced as multiple cycles - telescopic slabs reset
-            n_cyc = max(1, round((b.end_date - b.start_date).days / 61))
+            n_cyc = max(1, round(win_days / 61))
             no_solar_bill = tneb.bill(gross / n_cyc) * n_cyc
             saved = round(no_solar_bill - float(b.cc_charges), 0)
             row.update({"self_consumed_kwh": round(self_used, 1),
                         "gross_consumption": round(gross, 1),
                         "bill_without_solar_rs": round(no_solar_bill, 0),
-                        "saved_rs": saved})
-            tot_saved += saved
-            tot_gross_days += 1
+                        "saved_rs": saved,
+                        "realized_rate": round(saved / gen, 2)})
         out.append(row)
+    return out
+
+
+@app.get("/tneb")
+def get_tneb():
+    cycles = _tneb_cycles()
+    out = [{k: v for k, v in c.items() if k not in ("start", "end")}
+           for c in cycles]
+    tot_saved = sum(c.get("saved_rs", 0) for c in cycles)
     measured = [c for c in out if "saved_rs" in c]
     avg_gross = (sum(c["gross_consumption"] for c in measured) / len(measured)
                  if measured else None)
@@ -361,96 +377,102 @@ def get_forecast():
 #  SAVINGS  (₹ saved vs grid)
 # ════════════════════════════════════════════════════════════════════
 @app.get("/savings")
-def get_savings(consumption: int = 600):
-    """Slab-based savings against the TNEB telescopic tariff (tneb.py).
-
-    `consumption` = assumed gross household usage per bi-monthly billing
-    cycle. There is no CT clamp, so this is an assumption the user sets
-    (estimate it from a TNEB bill), not a measurement. Solar's value under
-    telescopic slabs depends heavily on it: ~Rs 2.4/kWh at 400 units up to
-    ~Rs 10/kWh at 1000 units.
-    """
+def get_savings():
+    """MEASURED savings, anchored on the real TNEB net-metering bills
+    (_tneb_cycles): billed cycles use actual import/export + generation;
+    the current unbilled cycle and intra-day/month displays are valued at
+    the trailing realized Rs/kWh (last 3 billed cycles). Falls back to a
+    600-unit assumption only if tneb_bills.csv is absent."""
     df = get_full()
     df_s = df.copy()
     df_s['kwh'] = df_s['power_w'] * 5/60/1000   # each row = 5-min reading
 
     today = date.today()
     this_month_start = today.replace(day=1)
-    this_year_start  = today.replace(month=1, day=1)
+    this_year_start = today.replace(month=1, day=1)
+    today_kwh = float(df_s[df_s['t'].dt.date == today]['kwh'].sum())
+    month_kwh = float(df_s[df_s['t'].dt.date >= this_month_start]['kwh'].sum())
+    year_kwh = float(df_s[df_s['t'].dt.date >= this_year_start]['kwh'].sum())
+    total_kwh = float(df_s['kwh'].sum())
 
-    today_kwh  = float(df_s[df_s['t'].dt.date == today]['kwh'].sum())
-    month_kwh  = float(df_s[df_s['t'].dt.date >= this_month_start]['kwh'].sum())
-    year_kwh   = float(df_s[df_s['t'].dt.date >= this_year_start]['kwh'].sum())
-    total_kwh  = float(df_s['kwh'].sum())
+    cycles = _tneb_cycles()
+    measured = [c for c in cycles if c.get("saved_rs") is not None]
+    if not measured:
+        # no bills on file - old assumption-based estimate at 600 units
+        rate = tneb.effective_rate(600, 800)
+        est = total_kwh * rate
+        return {"tariff_rs_per_kwh": rate, "usage_source": "assumed",
+                "install_cost_rs": INSTALL_COST_RS,
+                "today_kwh": round(today_kwh, 2), "today_rs": round(today_kwh * rate, 2),
+                "month_kwh": round(month_kwh, 2), "month_rs": round(month_kwh * rate, 2),
+                "year_kwh": round(year_kwh, 2), "year_rs": round(year_kwh * rate, 2),
+                "total_kwh": round(total_kwh, 2), "total_rs": round(est, 2),
+                "pct_recovered": round(min(100, est / INSTALL_COST_RS * 100), 1),
+                "months_to_breakeven": None, "breakeven_achieved": False,
+                "monthly_chart": [], "tariff_note": "no TNEB bills on file"}
 
-    # bi-monthly TNEB cycles, approximated as calendar month pairs
-    per = df_s['t'].dt.to_period('M')
-    df_s['month'] = per
-    df_s['cycle'] = [f"{p.year}-C{(p.month + 1) // 2}" for p in per]
-    # provision: when a meter posts to /consumption/reading, cycles with
-    # >=80% daily coverage use MEASURED gross usage instead of the assumption
-    meter_daily = consumption_meter.daily_kwh()
-    def _cycle_gross(cycle_days):
-        vals = [meter_daily[d] for d in cycle_days if d in meter_daily]
-        if cycle_days and len(vals) >= 0.8 * len(cycle_days):
-            return sum(vals) * len(cycle_days) / len(vals), "measured"
-        return float(consumption), "assumed"
+    measured_saved = float(sum(c["saved_rs"] for c in measured))
+    measured_gen = float(sum(c["generation_kwh"] for c in measured))
+    realized_rate = measured_saved / max(measured_gen, 1e-9)
+    trailing = measured[-3:]
+    trailing_rate = (sum(c["saved_rs"] for c in trailing)
+                     / max(1e-9, sum(c["generation_kwh"] for c in trailing)))
 
-    cyc = df_s.groupby('cycle')['kwh'].sum()
-    days_by_cycle = df_s.groupby('cycle')['t'].apply(
-        lambda s: sorted({t.date() for t in s}))
-    cycles = []
-    for c, v in cyc.items():
-        gross, src = _cycle_gross(days_by_cycle.get(c, []))
-        cycles.append({"cycle": c, "solar_kwh": round(float(v), 1),
-                       "gross_kwh": round(gross, 1), "usage_source": src,
-                       "saved_rs": tneb.savings(gross, float(v)),
-                       "eff_rate": tneb.effective_rate(gross, float(v))})
-    total_saved_rs = float(sum(c["saved_rs"] for c in cycles))
-    year_saved_rs = float(sum(c["saved_rs"] for c in cycles
-                              if c["cycle"].startswith(str(today.year))))
+    # current unbilled cycle: production since the last meter reading,
+    # valued at the trailing realized rate (estimate until the next bill)
+    last_end = max(c["end"] for c in cycles)
+    cur_kwh = float(df_s.loc[df_s['t'] >= last_end, 'kwh'].sum())
+    cur_est_rs = cur_kwh * trailing_rate
+    total_saved_rs = measured_saved + cur_est_rs
 
-    # blended rate on a typical full cycle, for intra-cycle displays
-    typical_cycle_kwh = float(cyc[:-1].mean()) if len(cyc) > 1 else float(cyc.mean())
-    rate = tneb.effective_rate(consumption, typical_cycle_kwh)
+    year_saved_rs = float(sum(
+        c["saved_rs"] for c in measured
+        if pd.Timestamp(c["end"]).year == today.year)) + cur_est_rs
 
-    # monthly chart: cycle savings split across its months pro-rata by kWh
+    # monthly chart: each month's kWh valued at its billing cycle's
+    # realized rate; months after the last bill use the trailing rate
+    df_s['month'] = df_s['t'].dt.to_period('M')
     monthly = df_s.groupby('month')['kwh'].sum().tail(12)
-    saved_by_cycle = {c["cycle"]: c for c in cycles}
-    monthly_chart = []
-    for m, v in monthly.items():
-        c = saved_by_cycle[f"{m.year}-C{(m.month + 1) // 2}"]
-        share = float(v) / c["solar_kwh"] if c["solar_kwh"] else 0
-        monthly_chart.append({"month": str(m), "kwh": round(float(v), 1),
-                              "savings": round(c["saved_rs"] * share, 0)})
+    def _rate_for(mstart):
+        mid = mstart + pd.Timedelta(days=15)
+        for c in measured:
+            if c["start"] <= mid <= c["end"]:
+                return c["realized_rate"]
+        return trailing_rate
+    monthly_chart = [{"month": str(m), "kwh": round(float(v), 1),
+                      "savings": round(float(v) * _rate_for(m.to_timestamp()), 0)}
+                     for m, v in monthly.items()]
 
+    # breakeven from the measured run-rate (Rs per month since first bill)
+    first_start = min(c["start"] for c in measured)
+    months_elapsed = max(1.0, (pd.Timestamp(today) - first_start).days / 30.44)
+    run_rate = total_saved_rs / months_elapsed
     remaining_rs = max(0.0, INSTALL_COST_RS - total_saved_rs)
-    avg_monthly_rs = (sum(m["savings"] for m in monthly_chart)
-                      / max(len(monthly_chart), 1))
-    months_to_breakeven = round(remaining_rs / max(avg_monthly_rs, 1), 1) \
+    months_to_breakeven = round(remaining_rs / max(run_rate, 1), 1) \
         if remaining_rs > 0 else 0.0
     pct_recovered = round(min(100.0, total_saved_rs / INSTALL_COST_RS * 100), 1)
 
+    avg_gross = sum(c["gross_consumption"] for c in measured) / len(measured)
     return {
-        "tariff_rs_per_kwh": rate,          # effective, not flat
-        "assumed_consumption": consumption,
-        "usage_source": ("measured" if any(c["usage_source"] == "measured"
-                                           for c in cycles) else "assumed"),
-        "tariff_note": ("TNEB telescopic slabs; assumed "
-                        f"{consumption} units gross use per bi-monthly cycle "
-                        "(no CT clamp - set this from your TNEB bill; "
-                        "a meter posting to /consumption/reading upgrades "
-                        "this to measured automatically)"),
+        "tariff_rs_per_kwh": round(realized_rate, 2),   # realized, measured
+        "trailing_rate": round(trailing_rate, 2),
+        "usage_source": "measured",
+        "avg_gross_units": round(avg_gross, 0),
+        "tariff_note": ("realized Rs/kWh from real TNEB bills (import/export "
+                        "meter + measured generation); current cycle estimated "
+                        "at trailing rate; history priced at the May-2026 "
+                        "tariff - pre-May rate table not on file"),
         "install_cost_rs": INSTALL_COST_RS,
-        "today_kwh":  round(today_kwh, 2),  "today_rs":  round(today_kwh * rate, 2),
-        "month_kwh":  round(month_kwh, 2),  "month_rs":  round(month_kwh * rate, 2),
+        "today_kwh":  round(today_kwh, 2),  "today_rs":  round(today_kwh * trailing_rate, 2),
+        "month_kwh":  round(month_kwh, 2),  "month_rs":  round(month_kwh * trailing_rate, 2),
         "year_kwh":   round(year_kwh, 2),   "year_rs":   round(year_saved_rs, 2),
         "total_kwh":  round(total_kwh, 2),  "total_rs":  round(total_saved_rs, 2),
+        "current_cycle_since": str(pd.Timestamp(last_end).date()),
+        "current_cycle_est_rs": round(cur_est_rs, 0),
         "pct_recovered": pct_recovered,
         "months_to_breakeven": months_to_breakeven,
         "breakeven_achieved": bool(remaining_rs == 0),
         "monthly_chart": monthly_chart,
-        "cycles": cycles,
     }
 
 # ════════════════════════════════════════════════════════════════════

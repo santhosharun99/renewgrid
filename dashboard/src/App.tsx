@@ -215,7 +215,6 @@ export default function App() {
 
   const [savings, setSavings]   = useState<any>(null);
   const [tneb, setTneb]         = useState<any>(null);
-  const [consumption, setConsumption] = useState(600);  // assumed gross units / bi-monthly TNEB cycle
   const [appliances, setAppliances] = useState<Appliance[]>(DEFAULT_APPLIANCES);
   const [showAdd, setShowAdd] = useState(false);
   const [newAppl, setNewAppl] = useState({ name: '', watts: '', qty: '1' });
@@ -267,8 +266,8 @@ export default function App() {
   }, [selFcDate]);
 
   useEffect(() => {
-    fetch(`${API}/savings?consumption=${consumption}`).then(r=>r.json()).then(setSavings).catch(console.error);
-  }, [consumption]);
+    fetch(`${API}/savings`).then(r=>r.json()).then(setSavings).catch(console.error);
+  }, []);
 
   useEffect(() => {
     if (!selDate) return;
@@ -580,18 +579,6 @@ export default function App() {
         {/* ═══════════════════ SAVINGS TAB ═══════════════════ */}
         {activeTab==='savings' && savings && (
           <div className="savings-layout">
-            {/* Assumption control - no CT clamp, so gross usage is an estimate */}
-            <div className="card" style={{display:'flex',alignItems:'center',gap:12,flexWrap:'wrap',padding:'12px 16px'}}>
-              <span style={{fontSize:13,color:'#888'}}>Your household usage (from TNEB bill, units per 2-month cycle):</span>
-              <select value={consumption} onChange={e=>setConsumption(Number(e.target.value))}
-                      style={{background:'#1a1a2e',color:'#fff',border:'1px solid #333',borderRadius:8,padding:'6px 10px'}}>
-                {[300,400,500,600,700,800,1000,1200].map(u=><option key={u} value={u}>{u} units</option>)}
-              </select>
-              <span style={{fontSize:12,color:'#666'}}>
-                Solar is worth ₹{savings.tariff_rs_per_kwh}/kWh at this usage - TNEB slabs are telescopic, so solar
-                offsets your most expensive units first. No CT clamp: usage is assumed, not measured.
-              </span>
-            </div>
             {/* Measured reality from TNEB net-metering bills */}
             {tneb && tneb.measured_cycles > 0 && (
               <div className="card">
@@ -634,7 +621,7 @@ export default function App() {
               </div>
               <div className="card stat-card">
                 <div className="stat-icon green"><IndianRupee size={20}/></div>
-                <div className="stat-info"><p>Saved This Year</p><h3>{fmtRs(savings.year_rs)}</h3><span className="sub-label">{savings.year_kwh} kWh</span></div>
+                <div className="stat-info"><p>Saved This Year</p><h3>{fmtRs(savings.year_rs)}</h3><span className="sub-label">{savings.year_kwh} kWh · incl. current cycle est.</span></div>
               </div>
               <div className="card stat-card">
                 <div className="stat-icon" style={{background:'linear-gradient(135deg,#7c3aed,#a78bfa)'}}><Sparkles size={20}/></div>
@@ -649,7 +636,7 @@ export default function App() {
                   <div className="stat-icon green"><TrendingUp size={20}/></div>
                   <div>
                     <h3>Investment Recovery</h3>
-                    <p className="sub-label">₹{(savings.install_cost_rs/1000).toFixed(0)}K system · ₹{savings.tariff_rs_per_kwh}/kWh effective · {savings.assumed_consumption} units assumed</p>
+                    <p className="sub-label">₹{(savings.install_cost_rs/1000).toFixed(0)}K system · ₹{savings.tariff_rs_per_kwh}/kWh realized (measured from bills) · usage ≈ {savings.avg_gross_units} units/cycle</p>
                   </div>
                 </div>
                 <div className={`breakeven-badge ${savings.breakeven_achieved?'achieved':''}`}>
