@@ -75,38 +75,45 @@ Shared modules (import, never re-implement):
 - `physics.py` - the pvlib chain + plant constants; reads `params.json`.
 - `dataset.py` - hourly modeling frame + feature list.
 
-## Headline numbers
+## Headline numbers (2026-07-11)
 
-Rolling-origin backtest (16 months, event days excluded via `events.csv`,
-daily kWh MAPE; 2026-07-10):
+Rolling-origin backtest (17 months, event days excluded, reanalysis
+weather inputs, daily kWh MAPE):
 
-| model | MAPE | DM test vs hybrid_l1 |
+| model | MAPE | DM test vs hybrid |
 |---|---|---|
-| **hybrid (pvlib + LGBM residual, l1, AQ features)** | **10.84%** | - |
-| pvlib alone (calibrated) | 11.13% | p = 0.096 - *not significant* |
-| hybrid (l2 objective) | 11.43% | p = 0.063 |
-| persistence (yesterday's profile) | 19.35% | p ≈ 2×10⁻¹⁴ |
-| climatology (hour × doy train mean) | 20.34% | p ≈ 4×10⁻¹⁴ |
+| **hybrid (pvlib + LGBM residual, l1, AQ + spatial 3x3 features)** | **10.31%** | - |
+| pvlib alone (calibrated) | 10.94% | p = 0.044 - significant |
+| persistence (yesterday's profile) | 19.03% | p ~ 1e-15 |
+| climatology (hour x doy train mean) | 19.73% | p ~ 1e-14 |
 
-- **⚠️ Superseded claim:** the earlier "pvlib 20.56% → hybrid 12.51%,
-  wins 14/15 months" was an artifact - the old backtest scored logger-gap
-  and outage days. On clean days the residual model adds ~0.3 MAPE points
-  over physics alone and the gap is **not statistically significant**.
-  The hybrid's value is proven against persistence/climatology, not pvlib.
-- Clear-day R² (top-5% VI days, sun hours): **0.9016** - unchanged by full
-  physics calibration (fitted tilt 11.8°, azim 104°, pdc0 2782 W, 7° eastern
-  shade horizon, pvwatts inverter; `calibrate.py` → `params.json`).
-  The physics layer is at the ceiling set by Open-Meteo irradiance noise.
-- Probabilistic: P10–P90 empirical coverage **67%** vs 80% nominal
-  (intervals too narrow; see `calibration.png`), mean width 417 W,
-  pinball 49/85/34 W at α = 0.1/0.5/0.9. Widen before showing bands in UI.
-- Degradation: clear-day bootstrap 95% CI **[−5.79, +3.59] %/yr** →
-  no detectable degradation (raw PR trends are misleading; see clear.py).
+**Operational (served-chain) skill** - replayed against archived weather
+*forecasts* (previous-runs API), i.e. what the system actually serves:
+
+| lead | hybrid MAPE | pvlib MAPE | band coverage (conformal, holdout) |
+|---|---|---|---|
+| day-1 | **11.01%** | 14.41% | 83.9% |
+| day-3 | 13.29% | 16.25% | 79.3% |
+| day-7 | 18.78% | 23.71% | 88.4% |
+
+- The ML layer earns 2.8-4.9 MAPE points in the operational setting
+  (correcting forecast-weather bias) - far more than the ~0.5 points it
+  shows on reanalysis inputs. Train/serve skew matters; measure both.
+- **⚠️ Superseded claim:** the early "pvlib 20.56% → hybrid 12.51%" was a
+  dirty-data artifact (gap/outage days were scored). Kept as a caution.
+- Probabilistic: raw P10-P90 undercovers (67%); **split-conformal (CQR)
+  restores 79-88%**, bands widen with horizon (leadtime_calibration.json).
+- Clear-day R² (top-5% VI days): **0.9016** - unchanged by full physics
+  calibration (fitted tilt 11.8, azim 104, pdc0 2782 W, 7-deg eastern shade
+  horizon, pvwatts inverter). Ceiling set by weather-data noise.
+- Degradation: bootstrap 95% CI **[-5.79, +3.59] %/yr** → none detectable.
 - Events (677 days): 20 outage-or-fault, 10 logger gaps, 4 underperformance;
-  **163 kWh ≈ ₹978** lost at ₹6/kWh (indicative; TNEB slabs are telescopic).
-  Logger gaps are lost *data*, not lost production, and are not charged.
-- Air-quality features: keep - with-AQ 10.84% vs without 11.17% MAPE
-  (small but consistent attenuation signal; see `shap_attribution.csv`).
+  163 kWh lost. Logger gaps are lost *data*, not production.
+- **Measured economics (real TNEB net-metering bills, 9 cycles):**
+  ₹51,317 saved (₹58.3k incl. current-cycle estimate), realized value
+  **₹6.48/kWh** (trailing ₹7.56), actual usage ~919 units/cycle,
+  self-consumption 44.8%, **38.9% of the ₹1.5L system recovered** in
+  ~20 months → breakeven ~5 years total.
 
 ## Consumption-ready (no CT clamp installed - by design, not omission)
 

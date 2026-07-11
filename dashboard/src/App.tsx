@@ -777,8 +777,8 @@ export default function App() {
               </div>
               <div className="card alert-card info">
                 <div className="alert-header"><div className="stat-icon"><TrendingUp size={20}/></div><h3>Prediction Accuracy</h3></div>
-                <p>Our physics-guided ML model is running at <strong>88.7% accuracy</strong> on daily kWh predictions across the last 15 months.</p>
-                <div className="cost-impact" style={{background:'rgba(99,102,241,0.1)',color:'#818cf8'}}>11.3% avg error</div>
+                <p>Our physics-guided ML model runs at <strong>89% accuracy</strong> on day-ahead kWh predictions, measured against real weather forecasts across 21 months.</p>
+                <div className="cost-impact" style={{background:'rgba(99,102,241,0.1)',color:'#818cf8'}}>11.0% avg day-ahead error · 18.8% at day 7</div>
               </div>
             </div>
           </div>
