@@ -16,7 +16,7 @@ app = FastAPI()
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True,
                    allow_methods=["*"], allow_headers=["*"])
 
-LAT, LON, TZ = 10.7905, 78.7047, "Asia/Kolkata"
+LAT, LON, TZ = 10.79, 78.70, "Asia/Kolkata"
 TILT, AZIM   = 10.0, 105.0
 PDC0, GAMMA  = 2674, -0.0035
 

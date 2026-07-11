@@ -10,7 +10,7 @@ import os
 import pandas as pd
 import pvlib
 
-LAT, LON, TZ = 10.7905, 78.7047, "Asia/Kolkata"
+LAT, LON, TZ = 10.79, 78.70, "Asia/Kolkata"
 
 DEFAULTS = dict(tilt=10.0, azim=105.0, pdc0=2674.0, gamma=-0.0035,
                 temp_model="sapm", shade_horizon=0.0, pac0=5000.0,

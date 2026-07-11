@@ -10,7 +10,7 @@ pretrained model; LightGBM learns only the residual.
 |---|---|
 | Array | 3.0 kWp nameplate (fitted effective size ≈ 2.67 kWp), tilt ~10°, azimuth ~105° (ESE, near-flat) |
 | Inverter | UTL 5F3 GT, 5 kW, 3-phase, grid-tied |
-| Location | 10.7905 N, 78.7047 E, Asia/Kolkata |
+| Location | 10.79 N, 78.70 E, Asia/Kolkata |
 | Logger | Solarman/IGEN LSW-3 stick at `192.168.29.238:8899`, logger serial `2787693150`, `mb_slave_id=1` |
 | CT clamp | **none** - consumption/grid-import data does not exist; only production is real. Do not add consumption/savings/battery features. |
 | Shading | house to the east: production step at ~07:30, costs ~0.3–0.5 kWh/day |

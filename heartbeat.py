@@ -11,7 +11,7 @@ import sqlite3, subprocess, sys, datetime
 
 DB = "/Users/santhosharun/solar/solar.db"
 STALE_MIN = 30
-LAT, LON = 10.7905, 78.7047
+LAT, LON = 10.79, 78.70
 
 
 def sun_is_up(now):

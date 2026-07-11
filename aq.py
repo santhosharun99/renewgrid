@@ -1,6 +1,6 @@
 import requests, pandas as pd
 
-LAT, LON = 10.7905, 78.7047
+LAT, LON = 10.79, 78.70
 START, END = "2024-09-01", "2026-07-09"
 
 r = requests.get("https://air-quality-api.open-meteo.com/v1/air-quality", params={

@@ -1,5 +1,5 @@
 import pandas as pd, numpy as np, pvlib
-LAT, LON, TZ = 10.7905, 78.7047, "Asia/Kolkata"
+LAT, LON, TZ = 10.79, 78.70, "Asia/Kolkata"
 df = pd.read_parquet("production.parquet")
 ph = df.set_index("t")["power_w"].resample("h").mean(); ph.index = ph.index.tz_localize(TZ)
 w = pd.read_csv("weather_all.csv", parse_dates=["time"]).set_index("time"); w.index = w.index.tz_localize(TZ)

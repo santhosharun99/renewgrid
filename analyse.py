@@ -2,7 +2,7 @@ import pandas as pd, requests
 
 import quality
 
-LAT, LON = 10.7905, 78.7047
+LAT, LON = 10.79, 78.70
 df = quality.load_production()
 d0, d1 = df.t.min().date(), df.t.max().date()
 
