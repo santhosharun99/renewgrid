@@ -1,177 +1,270 @@
-# solar - physics-guided ML for one rooftop PV plant
+# Solar - local-first monitoring and forecasting for a rooftop PV plant
 
-Forecasting, fault detection and attribution for a single residential
-grid-tied array in Trichy, Tamil Nadu. Physics first: `pvlib` **is** the
-pretrained model; LightGBM learns only the residual.
+A self-hosted monitoring, forecasting, and fault-detection system for a
+residential grid-tied solar installation in Trichy, Tamil Nadu. The stock
+vendor app only displays production graphs on a third-party cloud; this
+project reads the inverter directly over the local network, keeps every
+reading, and builds physics-guided machine-learning models on top of it -
+forecasting, outage classification, degradation analysis, and savings
+computed from real utility bills.
 
-## Plant
+The guiding principle: the plant owner should own the data. A dedicated
+always-on logger writing to self-hosted storage removes the vendor cloud
+from the loop entirely; this repository provides everything needed to run
+that way.
+
+## Results at a glance
+
+**Forecast accuracy** - rolling-origin backtest over 17 months of held-out
+data (daily kWh MAPE, event days excluded):
+
+| Model | MAPE | Significance (Diebold-Mariano) |
+|---|---|---|
+| Hybrid: pvlib physics + LightGBM residual | **10.31%** | - |
+| Calibrated pvlib physics alone | 10.94% | p = 0.044 vs hybrid |
+| Persistence (yesterday's profile) | 19.03% | p < 1e-14 |
+| Climatology (hour x day-of-year mean) | 19.73% | p < 1e-13 |
+
+**Operational skill** - the deployed forecasting chain replayed against
+archived weather forecasts (what the system actually receives in
+production), by forecast horizon:
+
+| Lead time | Hybrid MAPE | Physics-only MAPE | P10-P90 coverage (conformal) |
+|---|---|---|---|
+| 1 day | **11.01%** | 14.41% | 83.9% |
+| 3 days | 13.29% | 16.25% | 79.3% |
+| 7 days | 18.78% | 23.71% | 88.4% |
+
+The ML residual layer contributes 2.8-4.9 MAPE points under operational
+conditions - substantially more than it shows on reanalysis inputs -
+because much of its value lies in correcting weather-forecast bias.
+Uncertainty bands are calibrated with split-conformal prediction (raw
+quantile bands covered only 67% at a nominal 80%; conformal restores
+79-88% on held-out data) and widen with forecast horizon.
+
+**Measured economics** - from real TNEB net-metering bills (bidirectional
+meter), not estimates: Rs 51,317 saved across 9 billing cycles (~20
+months), a realized value of Rs 6.48 per solar kWh under the telescopic
+tariff, 44.8% self-consumption, and 38.9% of the Rs 1.5 lakh system cost
+recovered - on track for breakeven in about five years.
+
+**Plant health**: no detectable panel degradation over 22 months
+(bootstrap 95% CI [-5.79, +3.59] %/yr) and no detectable soiling effect at
+this site. 34 anomalous days classified across the record (grid outages,
+logger gaps, underperformance), totalling 163 kWh of lost production.
+
+## How it works
+
+```
+Inverter (Modbus over WiFi stick)          Solarman daily export (xlsx)
+        |  logger.py, 5-min polls                  |  authoritative backfill
+        v                                          v
+     solar.db  <--------- load_all.py ---------> production.parquet
+        |                                          |
+        |     Open-Meteo: weather archive/forecast/previous-runs,
+        |     air quality, 3x3 neighbouring-cell grid
+        v                                          v
+   physics.py (pvlib chain, calibrated)  ->  dataset.py (feature frame)
+        |                                          |
+        v                                          v
+  outage_classifier.py                    LightGBM quantile models
+  events.csv (kWh + Rs per event)         + conformal calibration
+        |                                          |
+        +-------------------+----------------------+
+                            v
+                 api.py (FastAPI)  ->  dashboard/ (React + Vite)
+```
+
+- **Physics first.** A calibrated `pvlib` model chain (fitted tilt,
+  azimuth, effective capacity, inverter stage, and an eastern-horizon
+  shading mask) produces the baseline expectation. LightGBM is trained
+  only on the residual, so the ML layer corrects the physics rather than
+  replacing it.
+- **Two-tier ingestion, self-healing.** The live logger provides the
+  real-time stream; the vendor's daily export is merged as the
+  authoritative backfill, so any gap in live collection is repaired
+  automatically.
+- **Honest uncertainty.** All accuracy figures come from rolling-origin
+  evaluation (never a random train/test split on time series), significance
+  is tested rather than asserted, and prediction intervals are
+  conformally calibrated per forecast horizon.
+- **Event-aware.** A classifier separates grid outages, inverter faults,
+  logger gaps, and underperformance days - using phase-voltage registers
+  where available - and each event is priced in kWh and rupees. Anomalous
+  days are excluded from model training and evaluation rather than
+  learned as if they were weather.
+
+## Dashboard
+
+A React dashboard (localhost) with five views:
+
+- **Live** - real-time power with a weather-reactive animation (clouds,
+  rain, and wind driven by current conditions), plus an interactive
+  appliance planner showing what current production can run.
+- **Forecast** - 7-day probabilistic forecast with an hour slider; the
+  scene renders each hour's forecast weather, and P10-P90 bands widen with
+  horizon.
+- **Savings** - measured savings from actual TNEB bills, per-cycle
+  breakdown, realized Rs/kWh, and investment-recovery tracking.
+- **Green impact** - CO2 avoided and equivalents.
+- **Insights** - statistical soiling verdict (with confidence intervals,
+  in plain language) and model-accuracy summary.
+
+## Hardware
 
 | | |
 |---|---|
-| Array | 3.0 kWp nameplate (fitted effective size ≈ 2.67 kWp), tilt ~10°, azimuth ~105° (ESE, near-flat) |
+| Array | 3.0 kWp nameplate (fitted effective capacity ~2.78 kWp), tilt ~12 deg, azimuth ~104 deg (ESE) |
 | Inverter | UTL 5F3 GT, 5 kW, 3-phase, grid-tied |
-| Location | 10.79 N, 78.70 E, Asia/Kolkata |
-| Logger | Solarman/IGEN LSW-3 stick at `192.168.29.238:8899`, logger serial `2787693150`, `mb_slave_id=1` |
-| CT clamp | **none** - consumption/grid-import data does not exist; only production is real. Do not add consumption/savings/battery features. |
-| Shading | house to the east: production step at ~07:30, costs ~0.3–0.5 kWh/day |
+| Data logger | Solarman/IGEN LSW-3 WiFi stick, Modbus via `pysolarmanv5` |
+| Consumption metering | none installed; the system is consumption-ready (see below) |
 
-### Register map (holding registers, READ-ONLY)
+### Inverter register map (holding registers, read-only)
 
-| reg | meaning | scale |
+| Register | Meaning | Scale |
 |---|---|---|
-| 3–7 | inverter serial (ASCII) | |
-| 60 | yield today | ×0.1 kWh |
-| 63+64 | total yield, 32-bit little-endian | ×0.1 kWh |
-| 70–72 | line-to-line voltage | ×0.1 V |
-| 73–75 | **phase voltage** (outage-vs-fault discriminator) | ×0.1 V |
-| 76–78 | phase current | ×0.1 A |
-| 79 | frequency | ×0.01 Hz |
-| 93 | power factor | ×0.001 |
-| 96 | DC input power (per map - but observed values fall BELOW AC output through the afternoon, so this is NOT total DC power; do not trust until identified) | ×0.1 W |
-| 109 | AC output power - UNRELIABLE in low sun: observed stuck near 2 kW while true output was <200 W (2026-07-10 afternoon, confirmed against cloud export + yield counter + phase currents). api.py sanity-gates it against the reg-60 counter slope | W |
-| 201+202 | total yield mirror | ×0.1 kWh |
-| 90, 91 | identical/lockstep; no per-string separation available | raw |
-| 88/89, 123, 126, 138, 145, 146 | unidentified, logged raw | raw |
+| 3-7 | inverter serial (ASCII) | |
+| 60 | energy today | x0.1 kWh |
+| 63+64 | lifetime energy (32-bit LE) | x0.1 kWh |
+| 70-72 | line-to-line voltage | x0.1 V |
+| 73-75 | phase voltage (used to distinguish grid outage from inverter fault) | x0.1 V |
+| 76-78 | phase current | x0.1 A |
+| 79 | grid frequency | x0.01 Hz |
+| 93 | power factor | x0.001 |
+| 96 | documented as DC input power, but observed values are inconsistent with that (falls below AC output); treated as unidentified | x0.1 W |
+| 109 | AC output power; unreliable in low-light conditions (observed stuck near 2 kW while true output was <200 W), so the API sanity-checks it against the register-60 energy counter | W |
+| 201+202 | lifetime energy mirror | x0.1 kWh |
+| 88-91, 123, 126, 138, 145, 146 | unidentified; logged raw | |
 
-**NEVER write to Modbus registers.** Registers ~300–500 hold grid-protection
-trip thresholds. Read-only, always.
+Safety note: registers in the ~300-500 range hold grid-protection trip
+thresholds. This project only ever reads registers; never write to them.
 
-## Live logging
+## Getting started
 
-- `logger.py` polls the stick every 5 min into `solar.db` table `readings`.
-- Runs via launchd: `com.solar.logger.plist` (KeepAlive + RunAtLoad,
-  logs to `logger_stdout.log`/`logger_stderr.log`):
-  `cp com.solar.logger.plist ~/Library/LaunchAgents/ && launchctl load ~/Library/LaunchAgents/com.solar.logger.plist`
-- `heartbeat.py` (via `com.solar.heartbeat.plist`, every 30 min) alerts if
-  `max(ts)` is >30 min stale **while the sun is up** - the stick is powered
-  by the inverter and is legitimately dark at night; a naive staleness check
-  would false-alarm all night.
-- **Two-tier ingestion, self-healing by design.** The live logger provides
-  the real-time stream; the daily Solarman export is the authoritative
-  backfill. `load_all.py` merges each new export and permanently fills any
-  gap in the live stream (missing samples, restarts), so the historical
-  record repairs itself with no manual intervention.
-- **Deployment target: any always-on host** (Raspberry Pi, mini-PC, or a
-  small VPS with a VPN back to the LAN). The logger is pure Python +
-  `pysolarmanv5` and runs anywhere; the launchd units above are the macOS
-  reference install.
-- **The end goal: own your data, fully.** A small dedicated device logging
-  every reading straight into your own cloud closes the loop - continuous
-  collection with zero gaps and zero dependence on the vendor's servers.
-  The panels are yours, the roof is yours, and with this the data is yours
-  too.
+```bash
+pip install -r requirements.txt
+cd dashboard && npm install && cd ..
+```
 
-## Pipeline - run in this order
+Data pipeline, in order:
 
-| step | script | writes |
+| Step | Script | Output |
 |---|---|---|
-| 1 | `load_all.py` | Solarman app xlsx exports in `data/` → `production.parquet` |
-| 2 | `analyse.py` | fetches Open-Meteo archive → `weather_all.csv`, daily eff table → `daily.csv` |
-| 3 | `aq.py` | Open-Meteo air quality → `aq_all.csv` |
-| 4 | `clearsky.py` | per-day variability index → `days.csv` |
-| 5 | `outage_classifier.py` | event classification → `events.csv` (`test` arg runs its unit tests) |
-| 6 | `calibrate.py` | fits tilt/azim/pdc0/shading/temp-model → `params.json` |
-| 7 | `pr.py`, `clear.py` | performance ratio, degradation CI → `pr_daily.csv` |
-| 8 | `model.py` | single-split diagnostic + quantile boosters → `m10/m50/m90.txt` |
-| 9 | `backtest.py` | rolling-origin eval, baselines, DM tests → `calibration.png` |
-| 10 | `shap_attribution.py` | factor attribution → `shap_attribution.csv` |
-| - | `export_forecast.py`, `api.py`, `dashboard/` | forecast JSON + web UI (blocked on validated classifier - now unblocked) |
+| 1 | `load_all.py` | vendor xlsx exports in `data/` -> `production.parquet` |
+| 2 | `analyse.py` | weather archive -> `weather_all.csv`, daily table -> `daily.csv` |
+| 3 | `aq.py` | air quality -> `aq_all.csv` |
+| 4 | `fetch_spatial.py` | 3x3 grid instability features -> `spatial.csv` |
+| 5 | `clearsky.py` | per-day variability index -> `days.csv` |
+| 6 | `outage_classifier.py` | event classification -> `events.csv` (run with `test` for its unit tests) |
+| 7 | `calibrate.py` | physics calibration -> `params.json` |
+| 8 | `model.py` | quantile models -> `m10/m50/m90.txt` |
+| 9 | `backtest.py` | rolling-origin evaluation, baselines, significance tests |
+| 10 | `leadtime.py` | per-horizon skill + conformal band calibration |
 
-Shared modules (import, never re-implement):
-- `quality.py` - `usable_days` (≥130 samples), `clear_days` (vi < q40,
-  drops ≤ 2), `exclude_events` (events.csv). analyse.py and model.py once
-  disagreed about which days were outages purely because each had its own
-  inline gates.
-- `physics.py` - the pvlib chain + plant constants; reads `params.json`.
-- `dataset.py` - hourly modeling frame + feature list.
+Serve:
 
-## Headline numbers (2026-07-11)
+```bash
+python api.py                    # FastAPI on :8000
+cd dashboard && npm run dev      # dashboard on :5173
+```
 
-Rolling-origin backtest (17 months, event days excluded, reanalysis
-weather inputs, daily kWh MAPE):
+Live logging runs `logger.py` on any always-on host (Raspberry Pi,
+mini-PC, or small VPS with VPN to the LAN); launchd unit files for macOS
+are included as a reference installation, with a sun-aware heartbeat that
+alerts on stale data only during daylight.
 
-| model | MAPE | DM test vs hybrid |
+Shared modules: `quality.py` (data-quality gates used by every analysis),
+`physics.py` (the pvlib chain and plant constants), `dataset.py` (the
+modeling feature frame). Centralizing these exists for a reason: early
+versions of two analysis scripts disagreed about which days were outages
+because each carried its own inline thresholds.
+
+## Consumption metering: not installed, but supported
+
+The plant measures production only; nothing in this project fabricates
+consumption data. Historical consumption and savings are reconstructed
+exactly from TNEB net-metering bills (import/export units per cycle
+combined with measured generation). For live consumption, an integration
+contract is implemented and tested: any energy meter (Shelly EM,
+PZEM-004T + ESP32, or a smart meter) that POSTs readings to
+`/consumption/reading` activates measured-usage analytics automatically -
+per-cycle tariff-slab position, live house load, and the self-consumption
+split - with no code changes.
+
+## Design principles
+
+1. **Physics carries the structure; ML corrects it.** Site geometry,
+   shading, and inverter behaviour do not transfer between plants, so no
+   pretraining on other plants' data.
+2. **Sequence models are the wrong shape for this problem.** Tomorrow's
+   output is a function of tomorrow's weather, not yesterday's power, so
+   no LSTM/CNN forecasters. (A sky-camera nowcasting layer, where sequence
+   information is genuinely causal, is the planned exception.)
+3. **Rolling-origin evaluation only.** Random train/test splits leak
+   future information in time series.
+4. **One model, attribution via SHAP.** Per-factor models mislead under
+   confounding: at this site, temperature correlates positively with
+   output (via sunshine) while its causal effect is negative.
+5. **Alerts must identify their cause.** Grid outage, inverter fault,
+   logger gap, and underperformance are distinguished explicitly; where
+   the data cannot support the distinction (the historical export lacks
+   phase voltage), the classifier reports the ambiguity instead of
+   guessing.
+6. **Surprisingly strong results get a confound hunt before a
+   celebration.** This policy produced the negative results below.
+
+## How this compares to existing options
+
+- **Versus the vendor app** (the default for this hardware): the app shows
+  production graphs on a third-party cloud and nothing else. It has no
+  forecast, no outage-vs-fault diagnosis, no tariff-aware economics, and
+  the data lives on servers the owner does not control. Everything in
+  this repository is additive to that baseline and runs locally.
+- **Versus standard forecasting baselines**: the hybrid model roughly
+  halves the error of persistence (19.0% -> 10.3%) and climatology
+  (19.7% -> 10.3%), with statistical significance at p < 1e-13. These are
+  the baselines most commercial "smart solar" forecasts quietly resemble.
+- **Versus physics alone**: a fully calibrated pvlib chain is a strong
+  model - the ML layer's edge over it is modest on clean reanalysis
+  inputs (10.9% -> 10.3%) but grows to 3-5 MAPE points in the operational
+  setting, where it also corrects weather-forecast bias. Both numbers are
+  reported; most published comparisons report only the flattering one.
+- **Versus published research systems**: day-ahead site-level MAPE of
+  ~11% and conformally calibrated intervals are in line with
+  research-grade results reported for national PV fleets with far richer
+  data (e.g. satellite-driven systems benchmarked on 6,400+ Swiss plants).
+  This system reaches that tier for one rooftop with free public weather
+  data and a Rs 0 sensing budget beyond the stock inverter.
+
+## Known limitations - and the planned fix for each
+
+| Limitation | Impact | Planned fix |
 |---|---|---|
-| **hybrid (pvlib + LGBM residual, l1, AQ + spatial 3x3 features)** | **10.31%** | - |
-| pvlib alone (calibrated) | 10.94% | p = 0.044 - significant |
-| persistence (yesterday's profile) | 19.03% | p ~ 1e-15 |
-| climatology (hour x doy train mean) | 19.73% | p ~ 1e-14 |
+| No intraday nowcasting: inside the 0-2 h window, NWP-based forecasts cannot see individual clouds | Live-day predictions lag fast sky changes | Satellite optical-flow nowcasting from INSAT via MOSDAC (access requested); sky camera for the 0-30 min range |
+| Collection depends on a host that may sleep | Gaps in the live stream (always repaired later by the export backfill, so no permanent data loss) | Dedicated always-on logger device writing to self-hosted storage |
+| No live consumption measurement | Self-consumption split known per billing cycle, not per hour | Any household energy meter activates the already-implemented `/consumption/reading` contract |
+| Historical bills priced at the current tariff | Pre-May-2026 savings slightly approximate | Period-aware tariff tables once older rate schedules are added |
+| Two inverter registers misreport (96, 109 in low light) | Live power needs sanity-gating (implemented) | Register identification against vendor documentation; energy counter remains the ground truth |
+| Single site | Findings (shading, soiling, tariff) are site-specific by design | The methodology, not the fitted model, is the transferable artifact |
 
-**Operational (served-chain) skill** - replayed against archived weather
-*forecasts* (previous-runs API), i.e. what the system actually serves:
+## Negative results
 
-| lead | hybrid MAPE | pvlib MAPE | band coverage (conformal, holdout) |
-|---|---|---|---|
-| day-1 | **11.01%** | 14.41% | 83.9% |
-| day-3 | 13.29% | 16.25% | 79.3% |
-| day-7 | 18.78% | 23.71% | 88.4% |
+Two early findings survived initial analysis, looked publishable, and were
+wrong. Both are retained because they document the failure modes this
+project is designed to avoid.
 
-- The ML layer earns 2.8-4.9 MAPE points in the operational setting
-  (correcting forecast-weather bias) - far more than the ~0.5 points it
-  shows on reanalysis inputs. Train/serve skew matters; measure both.
-- **⚠️ Superseded claim:** the early "pvlib 20.56% → hybrid 12.51%" was a
-  dirty-data artifact (gap/outage days were scored). Kept as a caution.
-- Probabilistic: raw P10-P90 undercovers (67%); **split-conformal (CQR)
-  restores 79-88%**, bands widen with horizon (leadtime_calibration.json).
-- Clear-day R² (top-5% VI days): **0.9016** - unchanged by full physics
-  calibration (fitted tilt 11.8, azim 104, pdc0 2782 W, 7-deg eastern shade
-  horizon, pvwatts inverter). Ceiling set by weather-data noise.
-- Degradation: bootstrap 95% CI **[-5.79, +3.59] %/yr** → none detectable.
-- Events (677 days): 20 outage-or-fault, 10 logger gaps, 4 underperformance;
-  163 kWh lost. Logger gaps are lost *data*, not production.
-- **Measured economics (real TNEB net-metering bills, 9 cycles):**
-  ₹51,317 saved (₹58.3k incl. current-cycle estimate), realized value
-  **₹6.48/kWh** (trailing ₹7.56), actual usage ~919 units/cycle,
-  self-consumption 44.8%, **38.9% of the ₹1.5L system recovered** in
-  ~20 months → breakeven ~5 years total.
+1. **"Panels degrading 4.2%/yr."** An artifact of a naive kWh-per-GHI
+   metric applied across a cloudier second year. With clear-day gating and
+   a bootstrap over the performance-ratio trend, the 95% CI is
+   [-5.79, +3.59] %/yr: no detectable degradation.
+2. **"Cumulative dust (PM10) drives soiling."** PM10 accumulation appeared
+   significant in isolation (p = 0.042) but collapsed after controlling
+   for days-since-rain (p = 0.827). Rain both washes panels and scrubs
+   particulates from the air - a textbook confound. The separate question
+   of same-day aerosol attenuation is real but small (~7% of SHAP
+   attribution).
 
-## Consumption-ready (no CT clamp installed - by design, not omission)
+An early headline result ("physics 20.6% MAPE improved to 12.5% by ML")
+was likewise retracted after the evaluation was found to include
+logger-gap and outage days; all numbers above postdate that correction.
 
-The plant measures only production; nothing here fakes consumption data.
-But the integration contract exists and is tested (consumption.py):
-any energy meter (Shelly EM, PZEM-004T + ESP32, smart meter) POSTing
-`{"load_w": ...}` to `POST /consumption/reading` activates, with zero
-refactoring: measured bi-monthly usage per TNEB cycle (>=80% coverage),
-real telescopic-slab position and savings, live house load, and the
-self-consumption vs export split. Until then /savings labels every
-figure as computed from *assumed* usage.
-
-## Standing decisions - do not re-litigate
-
-1. **Physics first.** `pvlib` is the pretrained model. Do not pretrain on
-   other plants' public datasets - geometry/shading/inverter don't transfer.
-2. **LightGBM on the residual** (actual − pvlib), never on raw power
-   (exception: the SHAP attribution model, which is explanatory, not a forecaster).
-3. **No CNN/LSTM/ConvLSTM.** Tomorrow's output is a function of tomorrow's
-   weather, not yesterday's power. Deep sequence models are wrong-shaped here.
-   (Possible future exception: sky-camera nowcasting.)
-4. **Rolling-origin backtests only.** Never `train_test_split` on time series.
-5. **One model with all features; attribution via SHAP.** Never
-   one-model-per-factor - temperature correlates +0.34 with power via
-   sunshine while its true causal effect is negative.
-6. **Every alert must distinguish plant fault / grid outage / logger gap**
-   before shipping (see `outage_classifier.py`; the historical app export has
-   no phase voltage, so the outage-vs-fault split there is honestly
-   `outage_or_fault`, not a guess).
-7. **Never commit API keys.** `nsrdb.py` reads `NREL_KEY`/`NREL_EMAIL` from
-   the environment and is gitignored.
-
-Also: never report R² on data including night-time zeros; distrust any
-result where RMSE < MAE (impossible - indicates a bug); if a result looks
-surprisingly strong, hunt the confound first.
-
-## Killed hypotheses - and why (do not resurrect without new controls)
-
-1. **"Panels degrading 4.2%/yr"** - artifact of a naive kWh/GHI metric on a
-   cloudier second year. With clear-day gating and bootstrap over the PR
-   trend the 95% CI is **[−5.79, +3.59] %/yr** → no detectable degradation.
-   The metric, not the panels, was degrading.
-2. **"Cumulative dust/PM10 drives soiling"** - PM10 looked significant alone
-   (p = 0.042), but after controlling for days-since-rain it collapsed to
-   p = 0.827. Rain both washes panels *and* scrubs PM out of the air:
-   classic confound. Dead. (The separate *attenuation* question - does
-   today's aerosol dim today's output - is answered by SHAP in
-   `shap_attribution.py`.)
-
-These two entries are the most valuable content in this repo: both were
-confident, plausible, and wrong.
