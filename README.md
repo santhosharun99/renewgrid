@@ -108,6 +108,17 @@ daily kWh MAPE; 2026-07-10):
 - Air-quality features: keep - with-AQ 10.84% vs without 11.17% MAPE
   (small but consistent attenuation signal; see `shap_attribution.csv`).
 
+## Consumption-ready (no CT clamp installed - by design, not omission)
+
+The plant measures only production; nothing here fakes consumption data.
+But the integration contract exists and is tested (consumption.py):
+any energy meter (Shelly EM, PZEM-004T + ESP32, smart meter) POSTing
+`{"load_w": ...}` to `POST /consumption/reading` activates, with zero
+refactoring: measured bi-monthly usage per TNEB cycle (>=80% coverage),
+real telescopic-slab position and savings, live house load, and the
+self-consumption vs export split. Until then /savings labels every
+figure as computed from *assumed* usage.
+
 ## Standing decisions - do not re-litigate
 
 1. **Physics first.** `pvlib` is the pretrained model. Do not pretrain on

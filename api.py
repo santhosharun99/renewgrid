@@ -9,6 +9,7 @@ import os
 import requests
 from datetime import date, datetime, timedelta
 
+import consumption as consumption_meter
 import tneb
 
 app = FastAPI()
@@ -163,6 +164,28 @@ def get_live():
     unique.sort(key=lambda x: x['ts'])
     return unique[-288:]
 
+@app.post("/consumption/reading")
+def post_consumption(body: dict):
+    """Ingestion contract for a future CT clamp / energy meter (see
+    consumption.py). No meter exists today; when one starts posting here,
+    /savings switches from assumed to measured usage automatically."""
+    if "load_w" not in body:
+        raise HTTPException(400, "load_w (watts) is required")
+    ts = consumption_meter.add_reading(
+        float(body["load_w"]),
+        import_w=body.get("import_w"), export_w=body.get("export_w"),
+        source=str(body.get("source", "meter")), ts=body.get("ts"))
+    return {"stored": ts}
+
+
+@app.get("/consumption/status")
+def consumption_status():
+    return {"meter_present": consumption_meter.has_data(),
+            "latest": consumption_meter.latest(),
+            "note": "no CT clamp installed - POST /consumption/reading "
+                    "from any meter to activate measured-usage analytics"}
+
+
 @app.get("/now")
 def get_now():
     """Instantaneous state for the live flow animation: latest inverter
@@ -308,11 +331,25 @@ def get_savings(consumption: int = 600):
     per = df_s['t'].dt.to_period('M')
     df_s['month'] = per
     df_s['cycle'] = [f"{p.year}-C{(p.month + 1) // 2}" for p in per]
+    # provision: when a meter posts to /consumption/reading, cycles with
+    # >=80% daily coverage use MEASURED gross usage instead of the assumption
+    meter_daily = consumption_meter.daily_kwh()
+    def _cycle_gross(cycle_days):
+        vals = [meter_daily[d] for d in cycle_days if d in meter_daily]
+        if cycle_days and len(vals) >= 0.8 * len(cycle_days):
+            return sum(vals) * len(cycle_days) / len(vals), "measured"
+        return float(consumption), "assumed"
+
     cyc = df_s.groupby('cycle')['kwh'].sum()
-    cycles = [{"cycle": c, "solar_kwh": round(float(v), 1),
-               "saved_rs": tneb.savings(consumption, float(v)),
-               "eff_rate": tneb.effective_rate(consumption, float(v))}
-              for c, v in cyc.items()]
+    days_by_cycle = df_s.groupby('cycle')['t'].apply(
+        lambda s: sorted({t.date() for t in s}))
+    cycles = []
+    for c, v in cyc.items():
+        gross, src = _cycle_gross(days_by_cycle.get(c, []))
+        cycles.append({"cycle": c, "solar_kwh": round(float(v), 1),
+                       "gross_kwh": round(gross, 1), "usage_source": src,
+                       "saved_rs": tneb.savings(gross, float(v)),
+                       "eff_rate": tneb.effective_rate(gross, float(v))})
     total_saved_rs = float(sum(c["saved_rs"] for c in cycles))
     year_saved_rs = float(sum(c["saved_rs"] for c in cycles
                               if c["cycle"].startswith(str(today.year))))
@@ -341,9 +378,13 @@ def get_savings(consumption: int = 600):
     return {
         "tariff_rs_per_kwh": rate,          # effective, not flat
         "assumed_consumption": consumption,
+        "usage_source": ("measured" if any(c["usage_source"] == "measured"
+                                           for c in cycles) else "assumed"),
         "tariff_note": ("TNEB telescopic slabs; assumed "
                         f"{consumption} units gross use per bi-monthly cycle "
-                        "(no CT clamp - set this from your TNEB bill)"),
+                        "(no CT clamp - set this from your TNEB bill; "
+                        "a meter posting to /consumption/reading upgrades "
+                        "this to measured automatically)"),
         "install_cost_rs": INSTALL_COST_RS,
         "today_kwh":  round(today_kwh, 2),  "today_rs":  round(today_kwh * rate, 2),
         "month_kwh":  round(month_kwh, 2),  "month_rs":  round(month_kwh * rate, 2),
