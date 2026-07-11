@@ -13,6 +13,7 @@ models refresh every few hours).
 Run standalone: python export_forecast.py [days]
 """
 import json
+import os
 import sys
 from datetime import date, datetime, timedelta
 
@@ -81,13 +82,36 @@ def generate(days=7):
     stacked = np.sort(np.vstack([preds["m10"], preds["m50"], preds["m90"]]),
                       axis=0)  # quantile crossing guard
 
+    # horizon-aware honesty: widen P10-P90 by the split-conformal offset
+    # measured per lead day against archived past forecasts (leadtime.py).
+    # Without this, day 6 wears day 1's confidence.
+    try:
+        with open("leadtime_calibration.json") as f:
+            _cal = {int(k): float(v) for k, v in json.load(f).items()}
+    except Exception:
+        _cal = {}
+
+    def _widen(lead):
+        if not _cal:
+            return 0.0
+        ks = sorted(_cal)
+        k = min(max(lead, ks[0]), ks[-1])
+        if k in _cal:
+            return _cal[k]
+        below = max(x for x in ks if x < k)
+        above = min(x for x in ks if x > k)
+        frac = (k - below) / (above - below)
+        return _cal[below] + frac * (_cal[above] - _cal[below])
+
     out_days = []
+    today = date.today()
     for day, idx in pd.Series(range(len(j)), index=j.index).groupby(j.index.date):
         rows = idx.values
+        q = _widen((day - today).days)
         hourly = [{"time": ts.strftime("%H:%M"),
-                   "p10": float(stacked[0, i]),
+                   "p10": float(max(0.0, stacked[0, i] - q)),
                    "p50": float(stacked[1, i]),
-                   "p90": float(stacked[2, i])}
+                   "p90": float(stacked[2, i] + q)}
                   for i, ts in zip(rows, j.index[rows])]
         out_days.append({
             "date": str(day),
@@ -100,6 +124,12 @@ def generate(days=7):
     doc = {"generated_at": datetime.now().isoformat(timespec="seconds"),
            "days": out_days}
     with open("forecast.json", "w") as f:
+        json.dump(doc, f)
+    # archive every issued forecast so future skill claims can be scored
+    # against our own operational record, not a reconstruction
+    os.makedirs("forecasts", exist_ok=True)
+    stamp = datetime.now().strftime("%Y%m%d_%H%M")
+    with open(f"forecasts/forecast_{stamp}.json", "w") as f:
         json.dump(doc, f)
     return doc
 

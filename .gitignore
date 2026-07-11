@@ -15,3 +15,5 @@ __pycache__/
 .DS_Store
 .vscode/
 forecast.json
+forecasts/
+leadtime_weather.csv
