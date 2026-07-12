@@ -43,9 +43,9 @@ quantile bands covered only 67% at a nominal 80%; conformal restores
 79-88% on held-out data) and widen with forecast horizon.
 
 **Measured economics** - from real TNEB net-metering bills (bidirectional
-meter), not estimates: Rs 51,317 saved across 9 billing cycles (~20
+meter), not estimates: over Rs 56,000 saved across 10 billing cycles (~21
 months), a realized value of Rs 6.48 per solar kWh under the telescopic
-tariff, 44.8% self-consumption, and 38.9% of the Rs 1.5 lakh system cost
+tariff, ~43% self-consumption, and 38.9% of the Rs 1.5 lakh system cost
 recovered - on track for breakeven in about five years.
 
 **Plant health**: no detectable panel degradation over 22 months

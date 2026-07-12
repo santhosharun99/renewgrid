@@ -375,3 +375,22 @@ header h1 { font-size: 1.65rem; font-weight: 700; letter-spacing: -0.4px; }
   background: rgba(251,146,60,0.1); padding: 5px 11px; border-radius: 7px; font-size: 0.84rem;
 }
 .cost-minor { color: var(--muted); background: rgba(255,255,255,0.04); }
+
+/* ─── Print / PDF export ─────────────────────── */
+@media print {
+  /* force the dark theme to actually render (browsers strip bg by default) */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  /* release the fixed-viewport lock so the full page flows across sheets */
+  html, body, .app-container, .main-content {
+    height: auto !important;
+    overflow: visible !important;
+  }
+  body { background: var(--bg) !important; }
+  .main-content { padding: 1.5rem !important; }
+  /* keep cards from splitting across a page break */
+  .card { break-inside: avoid; }
+}
+@page { background: #0f1015; margin: 12mm; }
