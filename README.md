@@ -1,10 +1,11 @@
-# RenewGrid - local-first monitoring and forecasting for a rooftop PV plant
+# RenewGrid - local-first monitoring, forecasting and fault detection for solar and wind plants
 
-A self-hosted monitoring, forecasting, and fault-detection system for a
-residential grid-tied solar installation in Trichy, Tamil Nadu. The stock
-vendor app only displays production graphs on a third-party cloud; this
-project reads the inverter directly over the local network, keeps every
-reading, and builds physics-guided machine-learning models on top of it -
+A self-hosted monitoring, forecasting and fault-detection platform planned for
+commercial solar and wind plants. It is tested and validated on a live
+grid-tied rooftop solar installation in Trichy, Tamil Nadu, which is where all
+the results below come from. Instead of relying on the vendor's third-party
+cloud app, it reads the inverter directly over the local network, keeps every
+reading, and builds physics-guided machine-learning models on top of it:
 forecasting, outage classification, degradation analysis, and savings
 computed from real utility bills.
 
