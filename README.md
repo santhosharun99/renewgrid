@@ -1,4 +1,4 @@
-# Solar - local-first monitoring and forecasting for a rooftop PV plant
+# RenewGrid - local-first monitoring and forecasting for a rooftop PV plant
 
 A self-hosted monitoring, forecasting, and fault-detection system for a
 residential grid-tied solar installation in Trichy, Tamil Nadu. The stock
